@@ -40,17 +40,28 @@ function requireAuth(req, res, next) {
   next();
 }
 
+// The API and web app live on different subdomains of onrender.com, and
+// onrender.com is registered as a "public suffix" (like herokuapp.com) —
+// browsers treat each *.onrender.com subdomain as its own separate site, so
+// SameSite=Lax silently drops the cookie on every fetch() the frontend
+// makes to the API. SameSite=None fixes that, but browsers require it to be
+// paired with Secure — which only works over https, hence the check.
+const isSecureContext = (process.env.WEB_BASE_URL || "").startsWith("https");
+
 function setSessionCookie(res, token, expiresAt) {
   res.cookie(COOKIE_NAME, token, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
+    secure: isSecureContext,
+    sameSite: isSecureContext ? "none" : "lax",
     expires: expiresAt,
   });
 }
 
 function clearSessionCookie(res) {
-  res.clearCookie(COOKIE_NAME);
+  res.clearCookie(COOKIE_NAME, {
+    secure: isSecureContext,
+    sameSite: isSecureContext ? "none" : "lax",
+  });
 }
 
 module.exports = { createSession, attachSession, requireAuth, setSessionCookie, clearSessionCookie, COOKIE_NAME };

@@ -2,8 +2,8 @@ const express = require("express");
 const pool = require("../db/pool");
 const { attachSession, requireAuth } = require("../middleware/session");
 const { requireGuildAccess } = require("../middleware/guildAccess");
-const { canCreateDepartment } = require("../config/plans");
-const { addMemberRole } = require("../discord/api");
+const { canCreateDepartment, requireFeature } = require("../config/plans");
+const { addMemberRole, removeMemberRole } = require("../discord/api");
 
 const router = express.Router({ mergeParams: true });
 router.use(attachSession, requireAuth, requireGuildAccess);
@@ -131,6 +131,60 @@ router.post("/:deptId/roster/sync", async (req, res) => {
     synced: results.filter(r => r.ok).length,
     failed: results.filter(r => !r.ok).map(r => r.userId),
   });
+});
+
+// ---- Applications (admin side: review queue) ----
+// The applicant-facing submit/status endpoints live in routes/apply.js,
+// reachable by any logged-in Discord user, not just guild admins.
+
+router.get("/:deptId/applications", requireFeature("applications"), async (req, res) => {
+  const { rows: deptRows } = await pool.query(
+    "SELECT id FROM departments WHERE id = $1 AND guild_id = $2",
+    [req.params.deptId, req.guild.id]
+  );
+  if (!deptRows.length) return res.status(404).json({ error: "Department not found" });
+
+  const status = req.query.status;
+  const { rows } = await pool.query(
+    status
+      ? "SELECT * FROM applications WHERE department_id = $1 AND status = $2 ORDER BY submitted_at DESC"
+      : "SELECT * FROM applications WHERE department_id = $1 ORDER BY submitted_at DESC",
+    status ? [req.params.deptId, status] : [req.params.deptId]
+  );
+  res.json({ applications: rows });
+});
+
+router.patch("/:deptId/applications/:appId", requireFeature("applications"), async (req, res) => {
+  const { status, feedback } = req.body;
+  if (!["approved", "denied", "pending"].includes(status)) {
+    return res.status(400).json({ error: "status must be approved, denied, or pending" });
+  }
+
+  const { rows: deptRows } = await pool.query(
+    "SELECT * FROM departments WHERE id = $1 AND guild_id = $2",
+    [req.params.deptId, req.guild.id]
+  );
+  if (!deptRows.length) return res.status(404).json({ error: "Department not found" });
+  const department = deptRows[0];
+
+  const { rows } = await pool.query(
+    `UPDATE applications SET status = $1, feedback = $2
+     WHERE id = $3 AND department_id = $4 RETURNING *`,
+    [status, feedback || null, req.params.appId, req.params.deptId]
+  );
+  if (!rows.length) return res.status(404).json({ error: "Application not found" });
+  const application = rows[0];
+
+  // Best-effort role swap — a failed Discord call (member left, missing
+  // permission) shouldn't roll back the decision itself, just the role move.
+  if (status === "approved") {
+    if (department.staff_role_id) await addMemberRole(req.guild.id, application.user_id, department.staff_role_id);
+    if (department.applicant_role_id) await removeMemberRole(req.guild.id, application.user_id, department.applicant_role_id);
+  } else if (status === "denied" && department.applicant_role_id) {
+    await removeMemberRole(req.guild.id, application.user_id, department.applicant_role_id);
+  }
+
+  res.json({ application });
 });
 
 module.exports = router;

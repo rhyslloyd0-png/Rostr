@@ -2,12 +2,12 @@
 
 Multi-tenant Discord roster management. Any server owner adds the bot and configures everything themselves from the web dashboard — no per-server backend setup.
 
-Built so far: Discord OAuth + bot install in one flow, guild/department data model, Stripe-backed plan tiers (Free/Pro/Enterprise), and a roster editor with Discord role sync. Applications, LOA, and SOP documents are the remaining phases.
+Built so far: Discord OAuth + bot install in one flow, guild/department data model, Stripe-backed plan tiers (Free/Pro/Enterprise), a roster editor with Discord role sync, and an Applications flow (custom questions, review queue, applicant status page). LOA and SOP documents are the remaining phases.
 
 ## Structure
 
-- `server/` — Express API: Discord OAuth, session cookies, guild/department CRUD, roster + role-sync, member search, Stripe billing + webhook. Talks to Postgres directly (`server/db`).
-- `web/` — Next.js dashboard: login, guild switcher, setup wizard, department pages with a roster editor.
+- `server/` — Express API: Discord OAuth (guild-owner and applicant-identify modes), session cookies, guild/department CRUD, roster + role-sync, member search, applications, Stripe billing + webhook. Talks to Postgres directly (`server/db`).
+- `web/` — Next.js dashboard: login, guild switcher, setup wizard, department pages with a roster editor and applications review; a separate `/apply/[guildId]/...` public flow for applicants.
 
 ## Local setup
 
@@ -20,6 +20,7 @@ Built so far: Discord OAuth + bot install in one flow, guild/department data mod
    cd web && npm install && npm run dev
    ```
 5. Visit `http://localhost:3000`, click "Add RostR to Discord" — this both installs the bot to a server you own/manage and logs you in, then drops you into the setup wizard.
+6. Applicants use a separate, lighter login at `/apply/<guildId>` — it only requests `identify` (no bot prompt, no server picker) since they're not installing anything, just proving who they are on Discord to submit an application.
 
 ## Stripe webhook (local testing)
 

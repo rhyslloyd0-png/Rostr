@@ -18,4 +18,15 @@ async function hasFeature(guild, feature) {
   return !!plan.features[feature];
 }
 
-module.exports = { getPlan, canCreateDepartment, hasFeature };
+// Express middleware factory — expects req.guild to already be set (i.e.
+// mounted after requireGuildAccess). 402 (Payment Required) rather than 403
+// so the frontend can tell "wrong plan" apart from "not authorized" and
+// show an upgrade prompt instead of an access-denied message.
+function requireFeature(feature) {
+  return async (req, res, next) => {
+    if (await hasFeature(req.guild, feature)) return next();
+    res.status(402).json({ error: "plan_feature_unavailable", message: `Upgrade your plan to use ${feature}` });
+  };
+}
+
+module.exports = { getPlan, canCreateDepartment, hasFeature, requireFeature };

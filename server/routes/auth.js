@@ -9,29 +9,42 @@ const WEB_BASE_URL = process.env.WEB_BASE_URL;
 
 // In-memory OAuth state store — short-lived (a few minutes at most, for the
 // length of the redirect round trip), so no need for a database table.
-const pendingStates = new Map(); // state -> expiresAt
-function issueState() {
+const pendingStates = new Map(); // state -> { expiresAt, returnTo }
+function issueState(returnTo) {
   const state = crypto.randomBytes(16).toString("hex");
-  pendingStates.set(state, Date.now() + 5 * 60 * 1000);
+  pendingStates.set(state, { expiresAt: Date.now() + 5 * 60 * 1000, returnTo });
   return state;
 }
 function consumeState(state) {
-  const expiresAt = pendingStates.get(state);
+  const entry = pendingStates.get(state);
   pendingStates.delete(state);
-  return !!expiresAt && expiresAt > Date.now();
+  if (!entry || entry.expiresAt <= Date.now()) return null;
+  return entry;
 }
 
-// GET /auth/discord/login — kicks off the combined "add bot + log in" flow.
+// Only ever redirect back to a path on our own site — a returnTo taken
+// straight from the query string would otherwise be an open redirect.
+function safeReturnTo(returnTo, fallback) {
+  if (typeof returnTo === "string" && returnTo.startsWith("/") && !returnTo.startsWith("//")) return returnTo;
+  return fallback;
+}
+
+// GET /auth/discord/login — kicks off the combined "add bot + log in" flow
+// (default), or a plain identify-only login for applicants when
+// ?mode=identify&returnTo=/some/path is given (see discord/oauth.js).
 router.get("/discord/login", (req, res) => {
-  const state = issueState();
-  res.redirect(oauth.buildAuthorizeUrl(state));
+  const mode = req.query.mode === "identify" ? "identify" : "bot";
+  const returnTo = safeReturnTo(req.query.returnTo, "/dashboard");
+  const state = issueState(returnTo);
+  res.redirect(oauth.buildAuthorizeUrl(state, mode));
 });
 
 // GET /auth/discord/callback
 router.get("/discord/callback", async (req, res) => {
   const { code, state, error } = req.query;
   if (error) return res.redirect(`${WEB_BASE_URL}/?error=${encodeURIComponent(error)}`);
-  if (!code || !state || !consumeState(state)) {
+  const stateEntry = state && consumeState(state);
+  if (!code || !stateEntry) {
     return res.redirect(`${WEB_BASE_URL}/?error=invalid_state`);
   }
 
@@ -56,7 +69,7 @@ router.get("/discord/callback", async (req, res) => {
       return res.redirect(`${WEB_BASE_URL}/dashboard/${g.id}/setup`);
     }
 
-    return res.redirect(`${WEB_BASE_URL}/dashboard`);
+    return res.redirect(`${WEB_BASE_URL}${stateEntry.returnTo}`);
   } catch (err) {
     console.error("OAuth callback failed:", err);
     return res.redirect(`${WEB_BASE_URL}/?error=oauth_failed`);

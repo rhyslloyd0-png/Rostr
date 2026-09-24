@@ -22,6 +22,11 @@ export async function apiFetch(path, options = {}) {
   return data;
 }
 
-export function loginUrl() {
-  return `${API_BASE_URL}/auth/discord/login`;
+// mode "bot" (default) installs the bot and logs the guild owner in.
+// mode "identify" is a plain Discord login for applicants — no bot prompt,
+// no server picker — landing them back on returnTo once signed in.
+export function loginUrl({ mode = "bot", returnTo } = {}) {
+  const params = new URLSearchParams({ mode });
+  if (returnTo) params.set("returnTo", returnTo);
+  return `${API_BASE_URL}/auth/discord/login?${params.toString()}`;
 }

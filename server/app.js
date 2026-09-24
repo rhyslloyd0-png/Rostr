@@ -2,12 +2,17 @@ require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const cookieParser = require("cookie-parser");
+// Patches Express route handlers so a rejected promise reaches the error
+// middleware below instead of hanging the request — must load before any
+// router that relies on it (every route in this app is async).
+require("express-async-errors");
 
 const { migrate } = require("./db/migrate");
 const authRoutes = require("./routes/auth");
 const guildRoutes = require("./routes/guilds");
 const departmentRoutes = require("./routes/departments");
 const billingRoutes = require("./routes/billing");
+const applyRoutes = require("./routes/apply");
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -29,6 +34,7 @@ app.use("/auth", authRoutes);
 app.use("/guilds", guildRoutes);
 app.use("/guilds/:guildId/departments", departmentRoutes);
 app.use("/billing", billingRoutes);
+app.use("/apply", applyRoutes);
 
 app.use((err, req, res, next) => {
   console.error(err);

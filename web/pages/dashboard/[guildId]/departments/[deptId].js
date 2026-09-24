@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/router";
 import { apiFetch } from "../../../../lib/api";
+import ApplicationsPanel from "../../../../components/ApplicationsPanel";
 
 let slotIdCounter = 0;
 function newSlot() {
@@ -51,6 +52,7 @@ export default function DepartmentPage() {
   const { guildId, deptId } = router.query;
 
   const [department, setDepartment] = useState(null);
+  const [plan, setPlan] = useState(null);
   const [slots, setSlots] = useState(null);
   const [error, setError] = useState(null);
   const [status, setStatus] = useState(null);
@@ -62,10 +64,12 @@ export default function DepartmentPage() {
     Promise.all([
       apiFetch(`/guilds/${guildId}/departments/${deptId}`),
       apiFetch(`/guilds/${guildId}/departments/${deptId}/data/roster`),
+      apiFetch(`/guilds/${guildId}`),
     ])
-      .then(([deptData, rosterData]) => {
+      .then(([deptData, rosterData, guildData]) => {
         setDepartment(deptData.department);
         setSlots(rosterData.value.slots || []);
+        setPlan(guildData.plan);
       })
       .catch(setError);
   }, [guildId, deptId]);
@@ -158,6 +162,16 @@ export default function DepartmentPage() {
         <button className="btn secondary" disabled={syncing || !department.staff_role_id} onClick={sync}>
           {syncing ? "Syncing..." : "Sync Discord roles"}
         </button>
+      </div>
+
+      <div style={{ marginTop: 32 }}>
+        {plan?.features?.applications ? (
+          <ApplicationsPanel guildId={guildId} deptId={deptId} />
+        ) : (
+          <div className="card">
+            <p className="muted">Applications aren't available on the {plan?.key} plan. Upgrade from the guild dashboard to enable them.</p>
+          </div>
+        )}
       </div>
     </div>
   );

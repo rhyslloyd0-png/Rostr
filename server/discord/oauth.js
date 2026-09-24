@@ -15,15 +15,19 @@ const REDIRECT_URI = process.env.DISCORD_REDIRECT_URI;
 // Send Messages (posting to an applications channel later).
 const BOT_PERMISSIONS = "268435488";
 
-function buildAuthorizeUrl(state) {
+// mode "bot" (default) is the guild-owner flow described above. mode
+// "identify" is for applicants/staff who just need to prove who they are
+// on Discord — e.g. to submit an application — without being prompted to
+// install the bot anywhere or pick a server.
+function buildAuthorizeUrl(state, mode = "bot") {
   const params = new URLSearchParams({
     client_id: CLIENT_ID,
     redirect_uri: REDIRECT_URI,
     response_type: "code",
-    scope: "bot identify guilds",
-    permissions: BOT_PERMISSIONS,
+    scope: mode === "identify" ? "identify" : "bot identify guilds",
     state,
   });
+  if (mode !== "identify") params.set("permissions", BOT_PERMISSIONS);
   return `https://discord.com/oauth2/authorize?${params.toString()}`;
 }
 

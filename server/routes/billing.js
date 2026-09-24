@@ -81,7 +81,11 @@ router.post("/webhook", express.raw({ type: "application/json" }), async (req, r
   try {
     if (event.type === "checkout.session.completed") {
       const session = event.data.object;
-      const guildId = session.metadata?.guild_id;
+      // metadata.guild_id comes from our own /checkout endpoint; a Stripe
+      // Payment Link checkout instead carries the guild ID as
+      // client_reference_id (set via ?client_reference_id=<guildId> on the
+      // Payment Link URL — see web/pages/dashboard/[guildId]/index.js).
+      const guildId = session.metadata?.guild_id || session.client_reference_id;
       if (guildId) {
         const subscription = await stripe.subscriptions.retrieve(session.subscription);
         const priceId = subscription.items.data[0]?.price?.id;

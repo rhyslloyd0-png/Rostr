@@ -10,7 +10,6 @@ export default function GuildDashboard() {
   const [info, setInfo] = useState(null);
   const [departments, setDepartments] = useState(null);
   const [error, setError] = useState(null);
-  const [upgrading, setUpgrading] = useState(false);
 
   useEffect(() => {
     if (!guildId) return;
@@ -25,18 +24,11 @@ export default function GuildDashboard() {
       .catch(setError);
   }, [guildId]);
 
-  async function upgrade(priceEnvKey) {
-    setUpgrading(true);
-    try {
-      const { url } = await apiFetch(`/billing/${guildId}/checkout`, {
-        method: "POST",
-        body: { priceId: priceEnvKey },
-      });
-      window.location.href = url;
-    } catch (err) {
-      setError(err);
-      setUpgrading(false);
-    }
+  // Straight to the Stripe Payment Link — client_reference_id carries the
+  // guild ID through checkout so the webhook (routes/billing.js) knows
+  // which guild to upgrade once payment completes.
+  function upgradeUrl(paymentLink) {
+    return `${paymentLink}?client_reference_id=${guildId}`;
   }
 
   if (error) return <div className="container"><div className="card error">{error.message}</div></div>;
@@ -52,10 +44,13 @@ export default function GuildDashboard() {
         <div className="muted">
           {info.departmentCount} / {info.plan.max_departments === -1 ? "unlimited" : info.plan.max_departments} departments used
         </div>
-        {info.isOwner && info.plan.key === "free" && (
-          <button className="btn" style={{ marginTop: 12 }} disabled={upgrading} onClick={() => upgrade(process.env.NEXT_PUBLIC_STRIPE_PRICE_PRO)}>
-            Upgrade to Pro
-          </button>
+        {info.isOwner && info.plan.key !== "enterprise" && (
+          <div style={{ display: "flex", gap: 10, marginTop: 12 }}>
+            {info.plan.key === "free" && (
+              <a className="btn" href={upgradeUrl(process.env.NEXT_PUBLIC_STRIPE_PAYMENT_LINK_PRO)}>Upgrade to Pro</a>
+            )}
+            <a className="btn secondary" href={upgradeUrl(process.env.NEXT_PUBLIC_STRIPE_PAYMENT_LINK_ENTERPRISE)}>Upgrade to Enterprise</a>
+          </div>
         )}
       </div>
 
@@ -69,10 +64,13 @@ export default function GuildDashboard() {
       {atLimit ? (
         <div className="card">
           <p>You've reached your plan's department limit.</p>
-          {info.isOwner && (
-            <button className="btn" disabled={upgrading} onClick={() => upgrade(process.env.NEXT_PUBLIC_STRIPE_PRICE_PRO)}>
+          {info.isOwner && info.plan.key !== "enterprise" && (
+            <a
+              className="btn"
+              href={upgradeUrl(info.plan.key === "free" ? process.env.NEXT_PUBLIC_STRIPE_PAYMENT_LINK_PRO : process.env.NEXT_PUBLIC_STRIPE_PAYMENT_LINK_ENTERPRISE)}
+            >
               Upgrade to add more
-            </button>
+            </a>
           )}
         </div>
       ) : (

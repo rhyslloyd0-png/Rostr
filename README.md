@@ -2,12 +2,12 @@
 
 Multi-tenant Discord roster management. Any server owner adds the bot and configures everything themselves from the web dashboard — no per-server backend setup.
 
-Built so far: Discord OAuth + bot install in one flow, guild/department data model, Stripe-backed plan tiers (Free/Pro/Enterprise), a roster editor with Discord role sync, an Applications flow (custom questions, review queue, applicant status page), and Leave of Absence (self-service request, admin approval, automatic role activation/deactivation on a schedule). The SOP document library is the remaining phase.
+All planned Phase 1–5 features are built: Discord OAuth + bot install in one flow, guild/department data model, Stripe-backed plan tiers (Free/Pro/Enterprise), a roster editor with Discord role sync, an Applications flow (custom questions, review queue, applicant status page), Leave of Absence (self-service request, admin approval, automatic role activation/deactivation on a schedule), and an SOP document library (upload/rename/delete for admins, list/download for anyone holding the department's access/staff role).
 
 ## Structure
 
-- `server/` — Express API: Discord OAuth (guild-owner and applicant-identify modes), session cookies, guild/department CRUD, roster + role-sync, member search, applications, leave of absence + its scheduler (`jobs/loaScheduler.js`), Stripe billing + webhook. Talks to Postgres directly (`server/db`).
-- `web/` — Next.js dashboard: login, guild switcher, setup wizard, department pages with a roster editor, applications review, and LOA review; separate public flows at `/apply/[guildId]/...` and `/loa/[guildId]/...` for applicants and staff.
+- `server/` — Express API: Discord OAuth (guild-owner and applicant-identify modes), session cookies, guild/department CRUD, roster + role-sync, member search, applications, leave of absence + its scheduler (`jobs/loaScheduler.js`), SOP document storage (in Postgres, via `multer`), Stripe billing + webhook. Talks to Postgres directly (`server/db`).
+- `web/` — Next.js dashboard: login, guild switcher, setup wizard, department pages with a roster editor, applications review, LOA review, and SOP document management; separate public flows at `/apply/[guildId]/...`, `/loa/[guildId]/...`, and `/sop/[guildId]/...` for applicants and staff.
 
 ## Local setup
 
@@ -20,7 +20,11 @@ Built so far: Discord OAuth + bot install in one flow, guild/department data mod
    cd web && npm install && npm run dev
    ```
 5. Visit `http://localhost:3000`, click "Add RostR to Discord" — this both installs the bot to a server you own/manage and logs you in, then drops you into the setup wizard.
-6. Applicants and staff requesting leave use a separate, lighter login at `/apply/<guildId>` and `/loa/<guildId>/<deptId>` — it only requests `identify` (no bot prompt, no server picker) since they're not installing anything, just proving who they are on Discord.
+6. Applicants and staff (applying, requesting leave, or browsing SOP documents) use a separate, lighter login at `/apply/<guildId>`, `/loa/<guildId>/<deptId>`, and `/sop/<guildId>/<deptId>` — it only requests `identify` (no bot prompt, no server picker) since they're not installing anything, just proving who they are on Discord.
+
+## Plan gating
+
+Every feature beyond core roster management (applications, LOA, SOP) is gated by the `plans` table's `features` column, checked with `requireFeature()` in `server/config/plans.js`. A guild on the Free plan sees an upgrade prompt on the dashboard instead of the panel, and the equivalent API routes 402. Adjust the seeded plan limits/features in `server/db/migrations/0001_init.sql` before launch — the current Free/Pro/Enterprise split (1/10/unlimited departments) is a placeholder.
 
 ## Stripe webhook (local testing)
 

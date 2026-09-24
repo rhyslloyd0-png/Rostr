@@ -1,4 +1,5 @@
 const express = require("express");
+const multer = require("multer");
 const pool = require("../db/pool");
 const { attachSession, requireAuth } = require("../middleware/session");
 const { requireGuildAccess } = require("../middleware/guildAccess");
@@ -7,6 +8,19 @@ const { addMemberRole, removeMemberRole } = require("../discord/api");
 
 const router = express.Router({ mergeParams: true });
 router.use(attachSession, requireAuth, requireGuildAccess);
+
+// SOP documents are read into memory then written to Postgres as bytea —
+// fine at the size SOPs actually are (policy PDFs/docs, not video), and
+// keeps them durable without a separate object-storage bucket to manage.
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
+
+// Strips characters that would break out of the quoted filename in a
+// Content-Disposition header (control chars, quotes) — display_name and
+// filename both ultimately come from user input (an admin's rename, or the
+// uploader's own filename).
+function sanitizeFilename(name) {
+  return String(name).replace(/[\x00-\x1f"]/g, "_");
+}
 
 router.get("/", async (req, res) => {
   const { rows } = await pool.query(
@@ -229,6 +243,75 @@ router.patch("/:deptId/loa/:loaId", requireFeature("loa"), async (req, res) => {
   );
   if (!rows.length) return res.status(404).json({ error: "Leave request not found" });
   res.json({ request: rows[0] });
+});
+
+// ---- SOP documents (admin side: upload/manage) ----
+// Staff-facing list/download lives in routes/sop.js, reachable by anyone
+// holding the department's access/staff/admin/manager role, not just guild
+// admins.
+
+router.get("/:deptId/sop", requireFeature("sop"), async (req, res) => {
+  const { rows: deptRows } = await pool.query(
+    "SELECT id FROM departments WHERE id = $1 AND guild_id = $2",
+    [req.params.deptId, req.guild.id]
+  );
+  if (!deptRows.length) return res.status(404).json({ error: "Department not found" });
+
+  const { rows } = await pool.query(
+    `SELECT id, filename, display_name, content_type, size, uploaded_by, uploaded_at
+     FROM sop_files WHERE department_id = $1 ORDER BY uploaded_at DESC`,
+    [req.params.deptId]
+  );
+  res.json({ files: rows });
+});
+
+router.post("/:deptId/sop", requireFeature("sop"), upload.single("file"), async (req, res) => {
+  const { rows: deptRows } = await pool.query(
+    "SELECT id FROM departments WHERE id = $1 AND guild_id = $2",
+    [req.params.deptId, req.guild.id]
+  );
+  if (!deptRows.length) return res.status(404).json({ error: "Department not found" });
+  if (!req.file) return res.status(400).json({ error: "file is required" });
+
+  const { rows } = await pool.query(
+    `INSERT INTO sop_files (department_id, filename, display_name, content_type, size, data, uploaded_by)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
+     RETURNING id, filename, display_name, content_type, size, uploaded_by, uploaded_at`,
+    [req.params.deptId, req.file.originalname, req.body.displayName || null, req.file.mimetype, req.file.size, req.file.buffer, req.user.id]
+  );
+  res.status(201).json({ file: rows[0] });
+});
+
+router.patch("/:deptId/sop/:fileId", requireFeature("sop"), async (req, res) => {
+  const { rows } = await pool.query(
+    `UPDATE sop_files SET display_name = $1
+     WHERE id = $2 AND department_id = $3
+     RETURNING id, filename, display_name, content_type, size, uploaded_by, uploaded_at`,
+    [req.body.displayName || null, req.params.fileId, req.params.deptId]
+  );
+  if (!rows.length) return res.status(404).json({ error: "File not found" });
+  res.json({ file: rows[0] });
+});
+
+router.delete("/:deptId/sop/:fileId", requireFeature("sop"), async (req, res) => {
+  const { rowCount } = await pool.query(
+    "DELETE FROM sop_files WHERE id = $1 AND department_id = $2",
+    [req.params.fileId, req.params.deptId]
+  );
+  if (!rowCount) return res.status(404).json({ error: "File not found" });
+  res.status(204).end();
+});
+
+router.get("/:deptId/sop/:fileId/download", requireFeature("sop"), async (req, res) => {
+  const { rows } = await pool.query(
+    "SELECT * FROM sop_files WHERE id = $1 AND department_id = $2",
+    [req.params.fileId, req.params.deptId]
+  );
+  if (!rows.length) return res.status(404).json({ error: "File not found" });
+  const file = rows[0];
+  res.set("Content-Type", file.content_type);
+  res.set("Content-Disposition", `attachment; filename="${sanitizeFilename(file.display_name || file.filename)}"`);
+  res.send(file.data);
 });
 
 module.exports = router;

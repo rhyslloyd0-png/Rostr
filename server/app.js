@@ -14,6 +14,7 @@ const departmentRoutes = require("./routes/departments");
 const billingRoutes = require("./routes/billing");
 const applyRoutes = require("./routes/apply");
 const loaRoutes = require("./routes/loa");
+const sopRoutes = require("./routes/sop");
 const { startLoaScheduler } = require("./jobs/loaScheduler");
 
 const app = express();
@@ -38,8 +39,12 @@ app.use("/guilds/:guildId/departments", departmentRoutes);
 app.use("/billing", billingRoutes);
 app.use("/apply", applyRoutes);
 app.use("/loa", loaRoutes);
+app.use("/sop", sopRoutes);
 
 app.use((err, req, res, next) => {
+  if (err.code === "LIMIT_FILE_SIZE") {
+    return res.status(413).json({ error: "File too large (20MB max)" });
+  }
   console.error(err);
   res.status(500).json({ error: "Internal server error" });
 });

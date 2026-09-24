@@ -3,6 +3,7 @@ import { useRouter } from "next/router";
 import { apiFetch } from "../../../../lib/api";
 import ApplicationsPanel from "../../../../components/ApplicationsPanel";
 import LoaPanel from "../../../../components/LoaPanel";
+import SopPanel from "../../../../components/SopPanel";
 
 let slotIdCounter = 0;
 function newSlot() {
@@ -181,6 +182,16 @@ export default function DepartmentPage() {
         ) : (
           <div className="card">
             <p className="muted">Leave of absence isn't available on the {plan?.key} plan. Upgrade from the guild dashboard to enable it.</p>
+          </div>
+        )}
+      </div>
+
+      <div style={{ marginTop: 32 }}>
+        {plan?.features?.sop ? (
+          <SopPanel guildId={guildId} deptId={deptId} />
+        ) : (
+          <div className="card">
+            <p className="muted">The SOP library isn't available on the {plan?.key} plan. Upgrade from the guild dashboard to enable it.</p>
           </div>
         )}
       </div>

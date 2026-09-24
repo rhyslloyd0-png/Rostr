@@ -20,7 +20,7 @@ function startGatewayPresence() {
   // Guilds is the minimum intent discord.js requires to log in at all.
   client = new Client({ intents: [GatewayIntentBits.Guilds] });
 
-  client.once("ready", () => {
+  client.once("clientReady", () => {
     client.user.setPresence({ status: "online" });
     console.log(`Gateway presence connected as ${client.user.tag}`);
   });

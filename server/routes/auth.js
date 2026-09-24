@@ -7,19 +7,23 @@ const { createSession, setSessionCookie, clearSessionCookie, attachSession, requ
 const router = express.Router();
 const WEB_BASE_URL = process.env.WEB_BASE_URL;
 
-// In-memory OAuth state store — short-lived (a few minutes at most, for the
-// length of the redirect round trip), so no need for a database table.
-const pendingStates = new Map(); // state -> { expiresAt, returnTo }
-function issueState(returnTo) {
+// OAuth state, persisted in Postgres — see migrations/0002_oauth_states.sql
+// for why this isn't just an in-memory Map.
+async function issueState(returnTo) {
   const state = crypto.randomBytes(16).toString("hex");
-  pendingStates.set(state, { expiresAt: Date.now() + 5 * 60 * 1000, returnTo });
+  const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
+  await pool.query(
+    "INSERT INTO oauth_states (state, return_to, expires_at) VALUES ($1, $2, $3)",
+    [state, returnTo, expiresAt]
+  );
   return state;
 }
-function consumeState(state) {
-  const entry = pendingStates.get(state);
-  pendingStates.delete(state);
-  if (!entry || entry.expiresAt <= Date.now()) return null;
-  return entry;
+async function consumeState(state) {
+  const { rows } = await pool.query(
+    "DELETE FROM oauth_states WHERE state = $1 AND expires_at > now() RETURNING return_to",
+    [state]
+  );
+  return rows.length ? { returnTo: rows[0].return_to } : null;
 }
 
 // Only ever redirect back to a path on our own site — a returnTo taken
@@ -32,10 +36,10 @@ function safeReturnTo(returnTo, fallback) {
 // GET /auth/discord/login — kicks off the combined "add bot + log in" flow
 // (default), or a plain identify-only login for applicants when
 // ?mode=identify&returnTo=/some/path is given (see discord/oauth.js).
-router.get("/discord/login", (req, res) => {
+router.get("/discord/login", async (req, res) => {
   const mode = req.query.mode === "identify" ? "identify" : "bot";
   const returnTo = safeReturnTo(req.query.returnTo, "/dashboard");
-  const state = issueState(returnTo);
+  const state = await issueState(returnTo);
   res.redirect(oauth.buildAuthorizeUrl(state, mode));
 });
 
@@ -43,7 +47,7 @@ router.get("/discord/login", (req, res) => {
 router.get("/discord/callback", async (req, res) => {
   const { code, state, error } = req.query;
   if (error) return res.redirect(`${WEB_BASE_URL}/?error=${encodeURIComponent(error)}`);
-  const stateEntry = state && consumeState(state);
+  const stateEntry = state && await consumeState(state);
   if (!code || !stateEntry) {
     return res.redirect(`${WEB_BASE_URL}/?error=invalid_state`);
   }

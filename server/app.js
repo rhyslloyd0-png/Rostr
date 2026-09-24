@@ -13,6 +13,8 @@ const guildRoutes = require("./routes/guilds");
 const departmentRoutes = require("./routes/departments");
 const billingRoutes = require("./routes/billing");
 const applyRoutes = require("./routes/apply");
+const loaRoutes = require("./routes/loa");
+const { startLoaScheduler } = require("./jobs/loaScheduler");
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -35,6 +37,7 @@ app.use("/guilds", guildRoutes);
 app.use("/guilds/:guildId/departments", departmentRoutes);
 app.use("/billing", billingRoutes);
 app.use("/apply", applyRoutes);
+app.use("/loa", loaRoutes);
 
 app.use((err, req, res, next) => {
   console.error(err);
@@ -43,6 +46,7 @@ app.use((err, req, res, next) => {
 
 async function start() {
   await migrate();
+  startLoaScheduler();
   app.listen(PORT, () => console.log(`RostR API listening on :${PORT}`));
 }
 

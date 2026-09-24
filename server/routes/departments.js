@@ -187,4 +187,48 @@ router.patch("/:deptId/applications/:appId", requireFeature("applications"), asy
   res.json({ application });
 });
 
+// ---- Leave of absence (admin side: review queue) ----
+// Self-service submit/status for staff lives in routes/loa.js. Activating/
+// deactivating the LOA Discord role once a request is approved happens on
+// its own schedule (see jobs/loaScheduler.js) rather than here, since a
+// request's window can open or close with nobody touching the site.
+
+router.get("/:deptId/loa", requireFeature("loa"), async (req, res) => {
+  const { rows: deptRows } = await pool.query(
+    "SELECT id FROM departments WHERE id = $1 AND guild_id = $2",
+    [req.params.deptId, req.guild.id]
+  );
+  if (!deptRows.length) return res.status(404).json({ error: "Department not found" });
+
+  const status = req.query.status;
+  const { rows } = await pool.query(
+    status
+      ? "SELECT * FROM loa_requests WHERE department_id = $1 AND status = $2 ORDER BY start_date DESC"
+      : "SELECT * FROM loa_requests WHERE department_id = $1 ORDER BY start_date DESC",
+    status ? [req.params.deptId, status] : [req.params.deptId]
+  );
+  res.json({ requests: rows });
+});
+
+router.patch("/:deptId/loa/:loaId", requireFeature("loa"), async (req, res) => {
+  const { status } = req.body;
+  if (!["approved", "denied"].includes(status)) {
+    return res.status(400).json({ error: "status must be approved or denied" });
+  }
+
+  const { rows: deptRows } = await pool.query(
+    "SELECT id FROM departments WHERE id = $1 AND guild_id = $2",
+    [req.params.deptId, req.guild.id]
+  );
+  if (!deptRows.length) return res.status(404).json({ error: "Department not found" });
+
+  const { rows } = await pool.query(
+    `UPDATE loa_requests SET status = $1, decided_by = $2
+     WHERE id = $3 AND department_id = $4 RETURNING *`,
+    [status, req.user.id, req.params.loaId, req.params.deptId]
+  );
+  if (!rows.length) return res.status(404).json({ error: "Leave request not found" });
+  res.json({ request: rows[0] });
+});
+
 module.exports = router;

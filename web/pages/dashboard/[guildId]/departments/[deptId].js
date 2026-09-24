@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/router";
 import { apiFetch } from "../../../../lib/api";
 import ApplicationsPanel from "../../../../components/ApplicationsPanel";
+import LoaPanel from "../../../../components/LoaPanel";
 
 let slotIdCounter = 0;
 function newSlot() {
@@ -170,6 +171,16 @@ export default function DepartmentPage() {
         ) : (
           <div className="card">
             <p className="muted">Applications aren't available on the {plan?.key} plan. Upgrade from the guild dashboard to enable them.</p>
+          </div>
+        )}
+      </div>
+
+      <div style={{ marginTop: 32 }}>
+        {plan?.features?.loa ? (
+          <LoaPanel guildId={guildId} deptId={deptId} />
+        ) : (
+          <div className="card">
+            <p className="muted">Leave of absence isn't available on the {plan?.key} plan. Upgrade from the guild dashboard to enable it.</p>
           </div>
         )}
       </div>

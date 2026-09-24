@@ -6,6 +6,7 @@ import { loginUrl } from "../lib/api";
 const FEATURES = [
   { icon: "/brand/icon-ems.png", title: "EMS rosters", body: "Track all emergency services ranks with live Discord role sync — no manual role juggling." },
   { icon: "/brand/icon-gang.png", title: "Gang rosters", body: "Run as many crews or departments as your plan allows, each with its own roles and structure." },
+  { icon: "/brand/icon-staff.png", title: "Staff roster", body: "Keep a single view of every staff member across departments, ranks, and posts." },
   { icon: "/brand/icon-settings.png", title: "Fully configurable", body: "Every role, channel, and application question is set from the dashboard — no code, no redeploys." },
   { icon: "/brand/icon-fast.png", title: "Instant setup", body: "Add the bot, pick your roles, and you're running — the whole thing takes minutes, not a support ticket." },
 ];

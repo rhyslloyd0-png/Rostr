@@ -5,8 +5,22 @@ const { attachSession, requireAuth } = require("../middleware/session");
 const { requireGuildAccess } = require("../middleware/guildAccess");
 
 const router = express.Router();
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 const WEB_BASE_URL = process.env.WEB_BASE_URL;
+
+// Built lazily (not at module load) so the rest of the API still boots and
+// works when Stripe isn't configured yet — only requests that actually hit
+// a billing route fail, with a clear error, instead of the whole process
+// crashing on startup.
+let stripe = null;
+function getStripe() {
+  if (!process.env.STRIPE_SECRET_KEY) {
+    const err = new Error("Billing isn't configured yet (STRIPE_SECRET_KEY is unset)");
+    err.status = 503;
+    throw err;
+  }
+  if (!stripe) stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+  return stripe;
+}
 
 const PRICE_TO_PLAN = {
   [process.env.STRIPE_PRICE_ID_PRO]: "pro",
@@ -19,6 +33,7 @@ router.post("/:guildId/checkout", attachSession, requireAuth, requireGuildAccess
   const { priceId } = req.body;
   if (!priceId) return res.status(400).json({ error: "priceId is required" });
 
+  const stripe = getStripe();
   let customerId = req.guild.stripe_customer_id;
   if (!customerId) {
     const customer = await stripe.customers.create({
@@ -43,6 +58,7 @@ router.post("/:guildId/portal", attachSession, requireAuth, requireGuildAccess, 
   if (!req.isGuildOwner) return res.status(403).json({ error: "Only the server owner can manage billing" });
   if (!req.guild.stripe_customer_id) return res.status(400).json({ error: "No billing account yet" });
 
+  const stripe = getStripe();
   const session = await stripe.billingPortal.sessions.create({
     customer: req.guild.stripe_customer_id,
     return_url: `${WEB_BASE_URL}/dashboard/${req.guild.id}`,
@@ -53,6 +69,7 @@ router.post("/:guildId/portal", attachSession, requireAuth, requireGuildAccess, 
 // Stripe webhook — mounted with express.raw() in app.js (signature
 // verification needs the exact raw body, not the JSON-parsed one).
 router.post("/webhook", express.raw({ type: "application/json" }), async (req, res) => {
+  const stripe = getStripe();
   let event;
   try {
     event = stripe.webhooks.constructEvent(req.body, req.headers["stripe-signature"], process.env.STRIPE_WEBHOOK_SECRET);

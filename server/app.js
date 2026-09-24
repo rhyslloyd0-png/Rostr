@@ -45,6 +45,9 @@ app.use((err, req, res, next) => {
   if (err.code === "LIMIT_FILE_SIZE") {
     return res.status(413).json({ error: "File too large (20MB max)" });
   }
+  if (err.status) {
+    return res.status(err.status).json({ error: err.message });
+  }
   console.error(err);
   res.status(500).json({ error: "Internal server error" });
 });

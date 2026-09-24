@@ -16,6 +16,7 @@ const applyRoutes = require("./routes/apply");
 const loaRoutes = require("./routes/loa");
 const sopRoutes = require("./routes/sop");
 const { startLoaScheduler } = require("./jobs/loaScheduler");
+const { startGatewayPresence } = require("./discord/gatewayPresence");
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -55,6 +56,7 @@ app.use((err, req, res, next) => {
 async function start() {
   await migrate();
   startLoaScheduler();
+  startGatewayPresence();
   app.listen(PORT, () => console.log(`RostR API listening on :${PORT}`));
 }
 

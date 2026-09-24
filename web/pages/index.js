@@ -51,7 +51,7 @@ export default function Home() {
         <div className="nav-links">
           <a href="#features" className="muted">Features</a>
           <a href="#pricing" className="muted">Pricing</a>
-          <a href="https://github.com/rhyslloyd0-png/Rostr" className="muted" target="_blank" rel="noreferrer">Docs</a>
+          <Link href="/docs" className="muted">Docs</Link>
           <Link href="/dashboard" className="muted">Dashboard</Link>
         </div>
         <a className="btn" href={loginUrl()}>Add to Discord</a>
@@ -140,6 +140,11 @@ export default function Home() {
 
       <footer className="footer">
         RostR — EMS &amp; Gang Roster Manager for FiveM Discord servers
+        <div className="links">
+          <Link href="/docs">Docs</Link>
+          <Link href="/docs/terms">Terms of Service</Link>
+          <Link href="/docs/privacy">Privacy Policy</Link>
+        </div>
       </footer>
     </>
   );

@@ -40,19 +40,20 @@ function requireAuth(req, res, next) {
   next();
 }
 
-// The API and web app live on different subdomains of onrender.com, and
-// onrender.com is registered as a "public suffix" (like herokuapp.com) —
-// browsers treat each *.onrender.com subdomain as its own separate site, so
-// SameSite=Lax silently drops the cookie on every fetch() the frontend
-// makes to the API. SameSite=None fixes that, but browsers require it to be
-// paired with Secure — which only works over https, hence the check.
+// The web app proxies /api/* through to this API (see web/next.config.js),
+// so every request the browser makes lands on the web app's own origin —
+// this cookie is first-party from the browser's perspective even though a
+// different service issues it. Plain Lax is correct and works everywhere,
+// including browsers (Brave, Safari, Firefox) that block third-party
+// cookies outright regardless of SameSite=None; Secure — which is what an
+// earlier, direct-to-API-domain version of this cookie ran into.
 const isSecureContext = (process.env.WEB_BASE_URL || "").startsWith("https");
 
 function setSessionCookie(res, token, expiresAt) {
   res.cookie(COOKIE_NAME, token, {
     httpOnly: true,
     secure: isSecureContext,
-    sameSite: isSecureContext ? "none" : "lax",
+    sameSite: "lax",
     expires: expiresAt,
   });
 }
@@ -60,7 +61,7 @@ function setSessionCookie(res, token, expiresAt) {
 function clearSessionCookie(res) {
   res.clearCookie(COOKIE_NAME, {
     secure: isSecureContext,
-    sameSite: isSecureContext ? "none" : "lax",
+    sameSite: "lax",
   });
 }
 

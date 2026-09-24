@@ -2,7 +2,9 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
 import { apiFetch, loginUrl } from "../../../lib/api";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
+// See lib/api.js — routed through this app's own /api/* proxy so the
+// session cookie stays first-party instead of a blocked third-party cookie.
+const API_BASE_URL = "/api";
 
 function formatSize(bytes) {
   if (bytes < 1024) return `${bytes} B`;

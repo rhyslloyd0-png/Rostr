@@ -1,4 +1,8 @@
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
+// Routed through this app's own /api/* (proxied to the real API by
+// next.config.js) instead of the API's own onrender.com subdomain directly —
+// see next.config.js for why: it's what makes the session cookie first-party
+// instead of a third-party cookie browsers like Brave/Safari block outright.
+const API_BASE_URL = "/api";
 
 // Every call includes credentials so the rostr_session cookie the API set
 // on OAuth callback rides along automatically — no token to manage by hand.

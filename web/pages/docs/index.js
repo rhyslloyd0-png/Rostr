@@ -11,7 +11,7 @@ export default function GettingStarted() {
 
       <h2>1. Add the bot and sign in</h2>
       <p>
-        Click <a href={loginUrl()}>Add RostR to Discord</a> from the home page. This does two things in one step: it installs
+        Click <a href={loginUrl()}>Add ROSTR to Discord</a> from the home page. This does two things in one step: it installs
         the bot into whichever server you pick on Discord's own consent screen, and it logs you in as that server's owner.
         You'll land straight in the setup wizard for your first department.
       </p>

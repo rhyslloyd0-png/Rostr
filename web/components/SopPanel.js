@@ -1,6 +1,8 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
+// See lib/api.js — routed through this app's own /api/* proxy so the
+// session cookie stays first-party instead of a blocked third-party cookie.
+const API_BASE_URL = "/api";
 
 async function apiFetchRaw(path, options = {}) {
   const resp = await fetch(`${API_BASE_URL}${path}`, { ...options, credentials: "include" });

@@ -76,7 +76,7 @@ export default function Home() {
         </p>
         {error && <p className="error">Something went wrong signing in ({error}). Try again.</p>}
         <div className="hero-actions">
-          <a className="btn large" href={loginUrl()}>Add RostR to Discord</a>
+          <a className="btn large" href={loginUrl()}>Add ROSTR to Discord</a>
           <Link className="btn secondary large" href="/dashboard">View dashboard</Link>
         </div>
         <div className="badge-row">

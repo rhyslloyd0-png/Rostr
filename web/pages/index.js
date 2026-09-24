@@ -47,10 +47,23 @@ export default function Home() {
           <img src="/brand/app-icon.png" alt="" width={32} height={32} style={{ borderRadius: 8 }} />
           ROSTR
         </div>
-        <Link href="/dashboard" className="muted">Dashboard</Link>
+        <div className="nav-links">
+          <a href="#features" className="muted">Features</a>
+          <a href="#pricing" className="muted">Pricing</a>
+          <a href="https://github.com/rhyslloyd0-png/Rostr" className="muted" target="_blank" rel="noreferrer">Docs</a>
+          <Link href="/dashboard" className="muted">Dashboard</Link>
+        </div>
+        <a className="btn" href={loginUrl()}>Add to Discord</a>
       </nav>
 
       <div className="hero">
+        <div className="hero-float hero-float-left">
+          <span className="dot dot-green" /> Role sync active
+        </div>
+        <div className="hero-float hero-float-right">
+          <span className="dot dot-blue" /> 3 departments online
+        </div>
+
         <img src="/brand/logo-main.png" alt="RostR" style={{ width: 120, height: "auto" }} />
         <h1>
           Roster management,<br />
@@ -74,7 +87,7 @@ export default function Home() {
 
       <img className="banner-img" src="/brand/banner-horizontal.png" alt="" />
 
-      <div className="section">
+      <div className="section" id="features">
         <h2>Everything a roster needs</h2>
         <p className="section-lead">Built for FiveM RP servers running EMS, gangs, PD, or anything else you structure as a department.</p>
         <div className="feature-grid">
@@ -85,6 +98,13 @@ export default function Home() {
               <p>{f.body}</p>
             </div>
           ))}
+        </div>
+
+        <div className="roster-preview card">
+          <div className="roster-preview-header">Fire Department roster <span className="muted">— synced to Discord</span></div>
+          <div className="roster-preview-row"><span className="tag">Captain</span> J. Reyes <span className="pill pill-green">Synced</span></div>
+          <div className="roster-preview-row"><span className="tag">Medic</span> A. Chen <span className="pill pill-green">Synced</span></div>
+          <div className="roster-preview-row"><span className="tag">Applicant</span> T. Brooks <span className="pill pill-amber">Pending review</span></div>
         </div>
       </div>
 
@@ -100,7 +120,7 @@ export default function Home() {
         </div>
       </div>
 
-      <div className="section">
+      <div className="section" id="pricing">
         <h2>Plans</h2>
         <p className="section-lead">Pricing is being finalized — this is the feature breakdown per tier.</p>
         <div className="pricing-grid">

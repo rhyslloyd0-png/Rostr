@@ -48,10 +48,24 @@ export default function GuildDashboard() {
     return `${paymentLink}?client_reference_id=${guildId}`;
   }
 
+  // Existing subscribers change plan / cancel / update their card in
+  // Stripe's billing portal — never a second Payment Link, which would
+  // start a second subscription and bill them twice.
+  async function openBillingPortal() {
+    try {
+      const { url } = await apiFetch(`/billing/${guildId}/portal`, { method: "POST" });
+      window.location.href = url;
+    } catch (err) {
+      alert(err.body?.error || err.message);
+    }
+  }
+
   if (error) return <><AppHeader guildId={guildId} /><div className="container"><div className="card error">{error.message}</div></div></>;
   if (!info || !departments) return <><AppHeader guildId={guildId} /><div className="container"><div className="page-loading"><span className="spinner" /> Loading…</div></div></>;
 
   const atLimit = info.plan.max_departments !== -1 && info.departmentCount >= info.plan.max_departments;
+  const onFree = info.plan.key === "free";
+  const hasBillingAccount = !!info.guild.stripe_customer_id;
 
   return (
     <>
@@ -63,13 +77,23 @@ export default function GuildDashboard() {
         <div className="muted">
           {info.departmentCount} / {info.plan.max_departments === -1 ? "unlimited" : info.plan.max_departments} departments used
         </div>
-        {info.isOwner && info.plan.key !== "enterprise" && (
+        {info.isOwner && (onFree || hasBillingAccount) && (
           <div style={{ display: "flex", gap: 10, marginTop: 12 }}>
-            {info.plan.key === "free" && (
-              <a className="btn" href={upgradeUrl(process.env.NEXT_PUBLIC_STRIPE_PAYMENT_LINK_PRO)}>Upgrade to Pro</a>
+            {onFree ? (
+              <>
+                <a className="btn" href={upgradeUrl(process.env.NEXT_PUBLIC_STRIPE_PAYMENT_LINK_PRO)}>Upgrade to Pro</a>
+                <a className="btn secondary" href={upgradeUrl(process.env.NEXT_PUBLIC_STRIPE_PAYMENT_LINK_ENTERPRISE)}>Upgrade to Enterprise</a>
+              </>
+            ) : null}
+            {hasBillingAccount && (
+              <button className={onFree ? "btn secondary" : "btn"} onClick={openBillingPortal}>
+                {onFree ? "Billing history" : "Manage billing"}
+              </button>
             )}
-            <a className="btn secondary" href={upgradeUrl(process.env.NEXT_PUBLIC_STRIPE_PAYMENT_LINK_ENTERPRISE)}>Upgrade to Enterprise</a>
           </div>
+        )}
+        {info.isOwner && !onFree && hasBillingAccount && (
+          <p className="muted" style={{ fontSize: 13, margin: "8px 0 0" }}>Change plan, update your card, or cancel from Manage billing.</p>
         )}
       </div>
 
@@ -92,13 +116,11 @@ export default function GuildDashboard() {
       {atLimit ? (
         <div className="card">
           <p>You've reached your plan's department limit.</p>
-          {info.isOwner && info.plan.key !== "enterprise" && (
-            <a
-              className="btn"
-              href={upgradeUrl(info.plan.key === "free" ? process.env.NEXT_PUBLIC_STRIPE_PAYMENT_LINK_PRO : process.env.NEXT_PUBLIC_STRIPE_PAYMENT_LINK_ENTERPRISE)}
-            >
-              Upgrade to add more
-            </a>
+          {info.isOwner && onFree && (
+            <a className="btn" href={upgradeUrl(process.env.NEXT_PUBLIC_STRIPE_PAYMENT_LINK_PRO)}>Upgrade to add more</a>
+          )}
+          {info.isOwner && !onFree && hasBillingAccount && info.plan.key !== "enterprise" && (
+            <button className="btn" onClick={openBillingPortal}>Change plan to add more</button>
           )}
         </div>
       ) : (

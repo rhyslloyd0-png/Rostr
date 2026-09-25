@@ -91,10 +91,15 @@ router.post("/webhook", express.raw({ type: "application/json" }), async (req, r
         const priceId = subscription.items.data[0]?.price?.id;
         const plan = PRICE_TO_PLAN[priceId];
         if (plan) {
+          // Store the customer too — Payment Link checkouts never go through
+          // our /checkout endpoint, and without it the billing portal
+          // (cancel / change plan / update card) can't be opened.
           await pool.query(
-            "UPDATE guilds SET plan = $1, stripe_subscription_id = $2 WHERE id = $3 OR slug = $3",
-            [plan, subscription.id, guildId]
+            "UPDATE guilds SET plan = $1, stripe_subscription_id = $2, stripe_customer_id = $3 WHERE id = $4 OR slug = $4",
+            [plan, subscription.id, session.customer, guildId]
           );
+        } else {
+          console.error(`Checkout for guild ${guildId} used price ${priceId}, which matches neither STRIPE_PRICE_ID_PRO nor STRIPE_PRICE_ID_ENTERPRISE — plan not changed`);
         }
       }
     }
@@ -102,8 +107,10 @@ router.post("/webhook", express.raw({ type: "application/json" }), async (req, r
     if (event.type === "customer.subscription.updated" || event.type === "customer.subscription.deleted") {
       const subscription = event.data.object;
       const priceId = subscription.items.data[0]?.price?.id;
-      const isActive = subscription.status === "active" || subscription.status === "trialing";
-      const plan = isActive ? PRICE_TO_PLAN[priceId] : "free";
+      // past_due keeps the plan while Stripe retries the card; only a
+      // subscription that has actually ended drops the server to Free.
+      const isActive = ["active", "trialing", "past_due"].includes(subscription.status);
+      const plan = event.type === "customer.subscription.deleted" || !isActive ? "free" : PRICE_TO_PLAN[priceId];
       if (plan) {
         await pool.query(
           "UPDATE guilds SET plan = $1 WHERE stripe_subscription_id = $2",

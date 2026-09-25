@@ -15,6 +15,7 @@ const billingRoutes = require("./routes/billing");
 const applyRoutes = require("./routes/apply");
 const loaRoutes = require("./routes/loa");
 const sopRoutes = require("./routes/sop");
+const staffRoutes = require("./routes/staff");
 const { startLoaScheduler } = require("./jobs/loaScheduler");
 const { startGatewayPresence } = require("./discord/gatewayPresence");
 
@@ -41,6 +42,7 @@ app.use("/billing", billingRoutes);
 app.use("/apply", applyRoutes);
 app.use("/loa", loaRoutes);
 app.use("/sop", sopRoutes);
+app.use("/staff", staffRoutes);
 
 app.use((err, req, res, next) => {
   if (err.code === "LIMIT_FILE_SIZE") {

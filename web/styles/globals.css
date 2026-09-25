@@ -174,6 +174,34 @@ label { display: block; font-size: 13px; margin-bottom: 6px; color: #a5abba; }
 .footer .links { margin-top: 10px; display: flex; gap: 16px; justify-content: center; }
 .footer .links a:hover { color: #c4c8d4; }
 
+/* Staff landing page */
+.staff-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; flex-wrap: wrap; gap: 12px; }
+.staff-header-title { display: flex; align-items: center; gap: 16px; }
+.staff-header-title img { width: 56px; height: 56px; border-radius: 12px; }
+.staff-header-title h1 { margin: 0; }
+.staff-header-title p { margin: 2px 0 0; }
+.staff-banner {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 24px;
+  border-radius: 12px;
+  background: linear-gradient(120deg, rgba(47,143,255,0.12), rgba(95,180,255,0.04)), #171a21;
+  border: 1px solid #262b36;
+  margin-bottom: 28px;
+}
+.staff-avatar { width: 64px; height: 64px; border-radius: 50%; background: #262b36; flex-shrink: 0; }
+.staff-banner .eyebrow { font-size: 12px; letter-spacing: 0.6px; text-transform: uppercase; color: #6b7180; }
+.staff-banner h2 { margin: 2px 0 4px; font-size: 28px; }
+.staff-banner .status { color: var(--brand-blue-bright); font-weight: 600; }
+.section-label { font-size: 12px; text-transform: uppercase; letter-spacing: 0.6px; color: #6b7180; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
+.record-card { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.record-card .eyebrow { font-size: 12px; text-transform: uppercase; letter-spacing: 0.6px; color: #3ddc84; font-weight: 600; }
+.record-card h3 { margin: 4px 0; font-size: 22px; }
+.browse-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; }
+.browse-tile { display: block; }
+.browse-tile h3 { margin: 0 0 4px; font-size: 17px; }
+
 /* Docs */
 .docs-layout { display: flex; max-width: 1100px; margin: 0 auto; align-items: flex-start; }
 .docs-sidebar { flex: 0 0 220px; padding: 32px 20px; position: sticky; top: 0; }

@@ -40,6 +40,14 @@ export default function GettingStarted() {
         The Discord server owner always has full access. The owner can also designate specific Discord roles as guild
         admins from the dashboard, without touching Discord's own server settings.
       </p>
+
+      <h2>What regular staff see</h2>
+      <p>
+        Anyone holding a department's access or staff role gets their own personal page at
+        <code> /staff/&lt;your-server&gt;/&lt;department&gt;</code> — their current roster post, leave status, and quick
+        links to the roster, SOP library, and leave calendar. Admins and managers get Admin Panel / Manager Panel links
+        there too.
+      </p>
     </DocsLayout>
   );
 }

@@ -1,7 +1,8 @@
 import Head from "next/head";
 import Link from "next/link";
 import { useRouter } from "next/router";
-import { loginUrl } from "../lib/api";
+import { useEffect, useState } from "react";
+import { loginUrl, apiFetch } from "../lib/api";
 
 const FEATURES = [
   { icon: "/brand/icon-ems.png", title: "EMS rosters", body: "Track all emergency services ranks with live Discord role sync — no manual role juggling." },
@@ -48,13 +49,16 @@ const PLANS = [
   },
 ];
 
-// TODO: replace with a real support inbox or a Discord invite before this
-// ships publicly — placeholder so the button doesn't silently 404/bounce.
-const SUPPORT_CONTACT_HREF = "mailto:support@rostr.app";
+const SUPPORT_CONTACT_HREF = "https://discord.gg/y829Xsn5n";
 
 export default function Home() {
   const router = useRouter();
   const { error } = router.query;
+  const [activeServers, setActiveServers] = useState(null);
+
+  useEffect(() => {
+    apiFetch("/public/stats").then(d => setActiveServers(d.activeServers)).catch(() => {});
+  }, []);
 
   return (
     <>
@@ -120,11 +124,13 @@ export default function Home() {
           ))}
         </div>
 
-        <div className="roster-preview card">
-          <div className="roster-preview-header">Fire Department roster <span className="muted">— synced to Discord</span></div>
-          <div className="roster-preview-row"><span className="tag">Captain</span> J. Reyes <span className="pill pill-green">Synced</span></div>
-          <div className="roster-preview-row"><span className="tag">Medic</span> A. Chen <span className="pill pill-green">Synced</span></div>
-          <div className="roster-preview-row"><span className="tag">Applicant</span> T. Brooks <span className="pill pill-amber">Pending review</span></div>
+        <div className="stats-preview card">
+          <div className="stats-preview-header">Live on RostR right now</div>
+          <div className="stats-preview-row">
+            <span className="stats-preview-number">{activeServers === null ? "—" : activeServers.toLocaleString()}</span>
+            <span className="muted">Discord {activeServers === 1 ? "server" : "servers"} actively using RostR</span>
+            <span className="pill pill-green" style={{ marginLeft: "auto" }}>Live</span>
+          </div>
         </div>
       </div>
 

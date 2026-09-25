@@ -7,6 +7,7 @@ const cookieParser = require("cookie-parser");
 // router that relies on it (every route in this app is async).
 require("express-async-errors");
 
+const pool = require("./db/pool");
 const { migrate } = require("./db/migrate");
 const authRoutes = require("./routes/auth");
 const guildRoutes = require("./routes/guilds");
@@ -34,6 +35,14 @@ app.use((req, res, next) => {
 });
 
 app.get("/health", (req, res) => res.json({ ok: true }));
+
+// Public, unauthenticated — powers the "active servers" stat on the
+// marketing home page. Deliberately returns only a count, never guild
+// names/ids, since anonymous visitors hit this.
+app.get("/public/stats", async (req, res) => {
+  const { rows } = await pool.query("SELECT COUNT(*) FROM guilds");
+  res.json({ activeServers: Number(rows[0].count) });
+});
 
 app.use("/auth", authRoutes);
 app.use("/guilds", guildRoutes);

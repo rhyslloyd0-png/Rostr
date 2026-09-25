@@ -2,9 +2,9 @@ import Head from "next/head";
 import DocsLayout from "../../components/DocsLayout";
 
 const PLANS = [
-  { name: "Free", features: ["1 department", "Roster + Discord role sync"] },
-  { name: "Pro", features: ["Up to 10 departments", "Everything in Free", "Applications", "Leave of absence"] },
-  { name: "Enterprise", features: ["Unlimited departments", "Everything in Pro", "SOP document library"] },
+  { name: "Free", price: "£0", features: ["1 department", "Roster + Discord role sync"] },
+  { name: "Pro", price: "£2.99/month", features: ["Up to 10 departments", "Everything in Free", "Applications", "Leave of absence"] },
+  { name: "Enterprise", price: "£9.99/month", features: ["Unlimited departments", "Everything in Pro", "SOP document library"] },
 ];
 
 export default function BillingDoc() {

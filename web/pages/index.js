@@ -15,12 +15,16 @@ const PLANS = [
   {
     key: "free",
     name: "Free",
+    price: "£0",
+    period: "",
     tagline: "Try it on one department",
     features: ["1 department", "Roster + Discord role sync"],
   },
   {
     key: "pro",
     name: "Pro",
+    price: "£2.99",
+    period: "/month",
     tagline: "For growing communities",
     featured: true,
     features: ["Up to 10 departments", "Everything in Free", "Applications", "Leave of absence"],
@@ -28,10 +32,25 @@ const PLANS = [
   {
     key: "enterprise",
     name: "Enterprise",
+    price: "£9.99",
+    period: "/month",
     tagline: "For large multi-department servers",
     features: ["Unlimited departments", "Everything in Pro", "SOP document library"],
   },
+  {
+    key: "custom",
+    name: "Custom Build",
+    price: "Let's talk",
+    period: "",
+    tagline: "Bespoke features or integrations for your server",
+    features: ["Everything in Enterprise", "Custom features built for your server", "Direct support"],
+    contact: true,
+  },
 ];
+
+// TODO: replace with a real support inbox or a Discord invite before this
+// ships publicly — placeholder so the button doesn't silently 404/bounce.
+const SUPPORT_CONTACT_HREF = "mailto:support@rostr.app";
 
 export default function Home() {
   const router = useRouter();
@@ -123,16 +142,21 @@ export default function Home() {
 
       <div className="section" id="pricing">
         <h2>Plans</h2>
-        <p className="section-lead">Pricing is being finalized — this is the feature breakdown per tier.</p>
+        <p className="section-lead">Start free. Upgrade whenever you need more departments or features.</p>
         <div className="pricing-grid">
           {PLANS.map(p => (
             <div key={p.key} className={`card pricing-card${p.featured ? " featured" : ""}`}>
               <h3>{p.name}</h3>
               <p className="muted">{p.tagline}</p>
+              <div className="price">{p.price}<span>{p.period}</span></div>
               <ul>
                 {p.features.map(f => <li key={f}>{f}</li>)}
               </ul>
-              <a className="btn" href={loginUrl()}>Get started</a>
+              {p.contact ? (
+                <a className="btn secondary" href={SUPPORT_CONTACT_HREF}>Contact support</a>
+              ) : (
+                <a className="btn" href={loginUrl()}>Get started</a>
+              )}
             </div>
           ))}
         </div>

@@ -304,13 +304,7 @@ function RankRow({ post, sectionId, groupId, roles, certCatalog, driverLevels, m
         <td style={{ padding: 6, minWidth: 180 }}>
           <CertPills catalog={certCatalog} selected={post.certifications || []} onToggle={toggleCert} />
         </td>
-        <td style={{ padding: 6 }}>
-          {canEditStructure ? (
-            <input style={{ width: 130 }} type="date" value={post.since || ""} onChange={e => patch({ since: e.target.value })} />
-          ) : (
-            <span className="muted">{post.since || "—"}</span>
-          )}
-        </td>
+        <td style={{ padding: 6 }} className="muted">{post.since || "—"}</td>
         <td style={{ padding: 6 }}>
           {canEditStructure && (
             <button className="btn secondary" onClick={onRemove} title="Remove rank" style={{ padding: "4px 10px" }}>✕</button>

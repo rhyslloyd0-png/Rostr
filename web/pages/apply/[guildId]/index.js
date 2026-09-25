@@ -40,7 +40,7 @@ export default function ApplyGuildHome() {
       <h1>{data.guildName} — Applications</h1>
       {data.departments.length === 0 && <p className="muted">No departments are accepting applications right now.</p>}
       {data.departments.map(d => (
-        <Link key={d.id} href={`/apply/${guildId}/${d.id}`} className="card" style={{ display: "block" }}>
+        <Link key={d.id} href={`/apply/${guildId}/${d.slug}`} className="card" style={{ display: "block" }}>
           {d.name}
         </Link>
       ))}

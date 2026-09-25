@@ -10,31 +10,32 @@ const { addMemberRole, getGuildMember } = require("../discord/api");
 const router = express.Router();
 router.use(attachSession, requireAuth);
 
-async function loadGuildAndDept(guildId, deptId) {
-  const { rows: guildRows } = await pool.query("SELECT * FROM guilds WHERE id = $1", [guildId]);
+async function loadGuildAndDept(guildIdOrSlug, deptIdOrSlug) {
+  const { rows: guildRows } = await pool.query("SELECT * FROM guilds WHERE id = $1 OR slug = $1", [guildIdOrSlug]);
   if (!guildRows.length) return {};
   const guild = guildRows[0];
   if (!(await hasFeature(guild, "applications"))) return { guild };
 
   const { rows: deptRows } = await pool.query(
-    "SELECT * FROM departments WHERE id = $1 AND guild_id = $2",
-    [deptId, guildId]
+    "SELECT * FROM departments WHERE (id::text = $1 OR slug = $1) AND guild_id = $2",
+    [deptIdOrSlug, guild.id]
   );
   return { guild, department: deptRows[0] };
 }
 
 // Departments in this guild currently accepting applications.
 router.get("/:guildId", async (req, res) => {
-  const { rows: guildRows } = await pool.query("SELECT * FROM guilds WHERE id = $1", [req.params.guildId]);
+  const { rows: guildRows } = await pool.query("SELECT * FROM guilds WHERE id = $1 OR slug = $1", [req.params.guildId]);
   if (!guildRows.length) return res.status(404).json({ error: "Server not found" });
-  if (!(await hasFeature(guildRows[0], "applications"))) {
-    return res.json({ guildName: guildRows[0].name, departments: [] });
+  const guild = guildRows[0];
+  if (!(await hasFeature(guild, "applications"))) {
+    return res.json({ guildName: guild.name, departments: [] });
   }
   const { rows } = await pool.query(
-    "SELECT id, name FROM departments WHERE guild_id = $1 ORDER BY position, created_at",
-    [req.params.guildId]
+    "SELECT id, slug, name FROM departments WHERE guild_id = $1 ORDER BY position, created_at",
+    [guild.id]
   );
-  res.json({ guildName: guildRows[0].name, departments: rows });
+  res.json({ guildName: guild.name, departments: rows });
 });
 
 router.get("/:guildId/:deptId", async (req, res) => {
@@ -47,7 +48,7 @@ router.get("/:guildId/:deptId", async (req, res) => {
     [department.id]
   );
   const questions = rows.length ? (rows[0].value.fields || []) : [];
-  res.json({ department: { id: department.id, name: department.name }, questions });
+  res.json({ department: { id: department.id, slug: department.slug, name: department.name }, questions });
 });
 
 router.post("/:guildId/:deptId", async (req, res) => {

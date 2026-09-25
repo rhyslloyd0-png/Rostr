@@ -34,7 +34,7 @@ export default function DashboardHome() {
         </div>
       )}
       {guilds && guilds.map(g => (
-        <Link key={g.id} href={`/dashboard/${g.id}`} className="card" style={{ display: "block" }}>
+        <Link key={g.id} href={`/dashboard/${g.slug}`} className="card" style={{ display: "block" }}>
           <strong>{g.name}</strong>
           <div className="muted">Plan: {g.plan}</div>
         </Link>

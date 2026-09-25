@@ -56,7 +56,7 @@ export default function GuildDashboard() {
 
       <h2>Departments</h2>
       {departments.map(d => (
-        <Link key={d.id} href={`/dashboard/${guildId}/departments/${d.id}`} className="card" style={{ display: "block" }}>
+        <Link key={d.id} href={`/dashboard/${guildId}/departments/${d.slug}`} className="card" style={{ display: "block" }}>
           {d.name}
         </Link>
       ))}

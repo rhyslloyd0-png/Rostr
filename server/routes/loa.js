@@ -12,15 +12,15 @@ const { getGuildMember } = require("../discord/api");
 const router = express.Router();
 router.use(attachSession, requireAuth);
 
-async function loadGuildAndDept(guildId, deptId) {
-  const { rows: guildRows } = await pool.query("SELECT * FROM guilds WHERE id = $1", [guildId]);
+async function loadGuildAndDept(guildIdOrSlug, deptIdOrSlug) {
+  const { rows: guildRows } = await pool.query("SELECT * FROM guilds WHERE id = $1 OR slug = $1", [guildIdOrSlug]);
   if (!guildRows.length) return {};
   const guild = guildRows[0];
   if (!(await hasFeature(guild, "loa"))) return { guild };
 
   const { rows: deptRows } = await pool.query(
-    "SELECT * FROM departments WHERE id = $1 AND guild_id = $2",
-    [deptId, guildId]
+    "SELECT * FROM departments WHERE (id::text = $1 OR slug = $1) AND guild_id = $2",
+    [deptIdOrSlug, guild.id]
   );
   return { guild, department: deptRows[0] };
 }
@@ -29,7 +29,7 @@ router.get("/:guildId/:deptId", async (req, res) => {
   const { guild, department } = await loadGuildAndDept(req.params.guildId, req.params.deptId);
   if (!guild) return res.status(404).json({ error: "Server not found" });
   if (!department) return res.status(404).json({ error: "Department not found or leave requests aren't enabled" });
-  res.json({ department: { id: department.id, name: department.name } });
+  res.json({ department: { id: department.id, slug: department.slug, name: department.name } });
 });
 
 router.post("/:guildId/:deptId", async (req, res) => {

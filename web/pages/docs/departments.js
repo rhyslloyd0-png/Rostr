@@ -23,8 +23,13 @@ export default function DepartmentsDoc() {
       <h2>How many departments can I have?</h2>
       <p>This depends on your plan — see <a href="/docs/billing">Billing &amp; Plans</a>.</p>
 
-      <h2>Who can edit a department?</h2>
-      <p>The server owner, plus any Discord role the owner designates as a guild admin from the dashboard's settings.</p>
+      <h2>Admin Panel vs. Manager Panel</h2>
+      <p>Each department has two access tiers below the server owner, set from a department's Admin Panel:</p>
+      <ul>
+        <li><strong>Admin roles</strong> — full structural control: department settings, role mapping, application questions, and the SOP library.</li>
+        <li><strong>Manager roles</strong> — day-to-day operations: assigning/vacating roster posts, syncing roles, and reviewing applications and leave requests — but not the department's structure.</li>
+      </ul>
+      <p>Anyone without either role, but holding the department's access or staff role, can still view the roster and SOP library — just not edit anything.</p>
     </DocsLayout>
   );
 }

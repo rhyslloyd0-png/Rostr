@@ -3,6 +3,7 @@ const crypto = require("crypto");
 const pool = require("../db/pool");
 const oauth = require("../discord/oauth");
 const { createSession, setSessionCookie, clearSessionCookie, attachSession, requireAuth } = require("../middleware/session");
+const { uniqueGuildSlug } = require("../db/slug");
 
 const router = express.Router();
 const WEB_BASE_URL = process.env.WEB_BASE_URL;
@@ -64,13 +65,19 @@ router.get("/discord/callback", async (req, res) => {
     // the consent screen and hands its info back right here.
     if (token.guild) {
       const g = token.guild;
+      // Only a brand-new guild gets a freshly generated slug — ON CONFLICT
+      // leaves the existing slug alone so a later server rename doesn't
+      // change (and break) an already-bookmarked URL.
+      const { rows: existing } = await pool.query("SELECT slug FROM guilds WHERE id = $1", [g.id]);
+      const slug = existing.length ? existing[0].slug : await uniqueGuildSlug(pool, g.name);
+
       await pool.query(
-        `INSERT INTO guilds (id, name, icon, owner_discord_id)
-         VALUES ($1, $2, $3, $4)
+        `INSERT INTO guilds (id, name, icon, owner_discord_id, slug)
+         VALUES ($1, $2, $3, $4, $5)
          ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, icon = EXCLUDED.icon`,
-        [g.id, g.name, g.icon, discordUser.id]
+        [g.id, g.name, g.icon, discordUser.id, slug]
       );
-      return res.redirect(`${WEB_BASE_URL}/dashboard/${g.id}/setup`);
+      return res.redirect(`${WEB_BASE_URL}/dashboard/${slug}/setup`);
     }
 
     return res.redirect(`${WEB_BASE_URL}${stateEntry.returnTo}`);

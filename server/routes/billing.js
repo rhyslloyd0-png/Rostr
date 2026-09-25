@@ -47,8 +47,8 @@ router.post("/:guildId/checkout", attachSession, requireAuth, requireGuildAccess
     customer: customerId,
     mode: "subscription",
     line_items: [{ price: priceId, quantity: 1 }],
-    success_url: `${WEB_BASE_URL}/dashboard/${req.guild.id}?upgraded=1`,
-    cancel_url: `${WEB_BASE_URL}/dashboard/${req.guild.id}?upgrade_cancelled=1`,
+    success_url: `${WEB_BASE_URL}/dashboard/${req.guild.slug}?upgraded=1`,
+    cancel_url: `${WEB_BASE_URL}/dashboard/${req.guild.slug}?upgrade_cancelled=1`,
     metadata: { guild_id: req.guild.id },
   });
   res.json({ url: session.url });
@@ -61,7 +61,7 @@ router.post("/:guildId/portal", attachSession, requireAuth, requireGuildAccess, 
   const stripe = getStripe();
   const session = await stripe.billingPortal.sessions.create({
     customer: req.guild.stripe_customer_id,
-    return_url: `${WEB_BASE_URL}/dashboard/${req.guild.id}`,
+    return_url: `${WEB_BASE_URL}/dashboard/${req.guild.slug}`,
   });
   res.json({ url: session.url });
 });
@@ -92,7 +92,7 @@ router.post("/webhook", express.raw({ type: "application/json" }), async (req, r
         const plan = PRICE_TO_PLAN[priceId];
         if (plan) {
           await pool.query(
-            "UPDATE guilds SET plan = $1, stripe_subscription_id = $2 WHERE id = $3",
+            "UPDATE guilds SET plan = $1, stripe_subscription_id = $2 WHERE id = $3 OR slug = $3",
             [plan, subscription.id, guildId]
           );
         }

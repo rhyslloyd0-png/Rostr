@@ -29,7 +29,7 @@ export default function SetupDepartment() {
         method: "POST",
         body: { name, accessRoleId: accessRoleId || null, staffRoleId: staffRoleId || null },
       });
-      router.push(`/dashboard/${guildId}/departments/${department.id}`);
+      router.push(`/dashboard/${guildId}/departments/${department.slug}`);
     } catch (err) {
       setError(err);
       setSubmitting(false);

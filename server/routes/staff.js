@@ -36,11 +36,14 @@ router.get("/:guildId/:deptId", requireDepartmentMember, async (req, res) => {
   const sections = rosterRows.length ? (rosterRows[0].value.sections || []) : [];
 
   let currentPost = null;
+  outer:
   for (const section of sections) {
-    const rank = (section.ranks || []).find(r => r.userId === req.user.id);
-    if (rank) {
-      currentPost = { rank: rank.rank, section: section.name, callsign: rank.callsign || null };
-      break;
+    for (const group of section.groups || []) {
+      const rank = (group.ranks || []).find(r => r.userId === req.user.id);
+      if (rank) {
+        currentPost = { rank: rank.rank, section: section.name, callsign: rank.callsign || null };
+        break outer;
+      }
     }
   }
 

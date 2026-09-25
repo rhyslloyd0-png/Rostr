@@ -170,7 +170,7 @@ router.post("/:deptId/roster/sync", requireDepartmentManage, async (req, res) =>
     [req.department.id]
   );
   const sections = dataRows.length ? (dataRows[0].value.sections || []) : [];
-  const allRanks = sections.flatMap(s => s.ranks || []);
+  const allRanks = sections.flatMap(s => (s.groups || []).flatMap(g => g.ranks || []));
 
   // roleId -> Set of userIds who should hold it
   const desired = new Map();
@@ -283,20 +283,29 @@ async function placeApprovedApplicant(departmentId, application) {
   const roster = rosterRows[0].value;
   const section = (roster.sections || []).find(s => s.id === sectionId);
   if (!section) return;
+  section.groups = section.groups || [];
 
-  section.ranks = section.ranks || [];
-  let target = section.ranks.find(r => r.rank === rank && !r.userId);
+  let target = null;
+  for (const g of section.groups) {
+    target = (g.ranks || []).find(r => r.rank === rank && !r.userId);
+    if (target) break;
+  }
   if (!target) {
+    const hostGroup = section.groups.find(g => (g.ranks || []).some(r => r.rank === rank)) || section.groups[0];
+    if (!hostGroup) return;
     target = { id: `rank-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, rank, certifications: [], roleIds: [] };
-    section.ranks.push(target);
+    hostGroup.ranks = hostGroup.ranks || [];
+    hostGroup.ranks.push(target);
   }
 
   // Nobody holds two posts — vacate anywhere else in the roster they were
   // already assigned before seating them in the new spot.
   for (const s of roster.sections || []) {
-    for (const r of s.ranks || []) {
-      if (r.userId === application.user_id && r !== target) {
-        r.userId = ""; r.name = ""; r.discordUsername = "";
+    for (const g of s.groups || []) {
+      for (const r of g.ranks || []) {
+        if (r.userId === application.user_id && r !== target) {
+          r.userId = ""; r.name = ""; r.discordUsername = "";
+        }
       }
     }
   }

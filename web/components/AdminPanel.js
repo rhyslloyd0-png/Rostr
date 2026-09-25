@@ -285,7 +285,7 @@ function PlacementTab({ guildId, deptId, sections }) {
   if (!loaded) return <p className="muted">Loading...</p>;
 
   const activeSection = sections.find(s => s.id === sectionId);
-  const rankOptions = [...new Set((activeSection?.ranks || []).map(r => r.rank).filter(Boolean))];
+  const rankOptions = [...new Set((activeSection?.groups || []).flatMap(g => g.ranks || []).map(r => r.rank).filter(Boolean))];
 
   return (
     <div className="card">

@@ -3,7 +3,7 @@ const pool = require("../db/pool");
 const { attachSession, requireAuth } = require("../middleware/session");
 const { requireGuildAccess } = require("../middleware/guildAccess");
 const { getPlan } = require("../config/plans");
-const { getGuildRoles, getGuildChannels, searchGuildMembers } = require("../discord/api");
+const { getGuildRoles, getGuildChannels, searchGuildMembers, getAllGuildMembers } = require("../discord/api");
 
 const router = express.Router();
 router.use(attachSession, requireAuth);
@@ -52,6 +52,21 @@ router.get("/:guildId/members/search", requireGuildAccess, async (req, res) => {
       username: m.user.username,
       displayName: m.nick || m.user.global_name || m.user.username,
       avatar: m.user.avatar,
+    })),
+  });
+});
+
+// Full member list, loaded once by the roster editor's assign dropdown
+// rather than searched per keystroke — mirrors Midnight Roster's picker,
+// which filters a preloaded list client-side instead of hitting Discord's
+// search endpoint on every character typed.
+router.get("/:guildId/members/all", requireGuildAccess, async (req, res) => {
+  const members = await getAllGuildMembers(req.guild.id);
+  res.json({
+    members: members.filter(m => !m.user.bot).map(m => ({
+      userId: m.user.id,
+      username: m.user.username,
+      displayName: m.nick || m.user.global_name || m.user.username,
     })),
   });
 });

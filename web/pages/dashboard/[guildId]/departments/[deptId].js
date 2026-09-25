@@ -11,31 +11,53 @@ import LoaPanel from "../../../../components/LoaPanel";
 
 const DEFAULT_DRIVER_LEVELS = ["1", "2", "3", "4", "5"];
 
-// Migrates the old flat `{ slots: [...] }` roster shape (title/userId/
-// displayName) into one default "Staff" section under the current
-// `{ sections: [{ ranks: [...] }] }` shape, so roster data saved before this
-// redesign doesn't just disappear.
+// Migrates older roster shapes into the current three-level
+// section (category) -> group (sub-category) -> rank (post) shape, matching
+// Midnight Roster's layout, so roster data saved under either of the two
+// earlier shapes doesn't just disappear.
 function normalizeRoster(value) {
   const certCatalog = value.certCatalog || [];
-  if (value.sections) return { sections: value.sections, certCatalog };
+
+  if (value.sections?.length && value.sections[0].groups) {
+    return { sections: value.sections, certCatalog };
+  }
+
+  // Previous shape: sections with a flat `ranks` array, no group layer.
+  if (value.sections) {
+    return {
+      certCatalog,
+      sections: value.sections.map(s => ({
+        ...s,
+        groups: [{ id: `${s.id}-group`, name: "", ranks: s.ranks || [] }],
+        ranks: undefined,
+      })),
+    };
+  }
+
+  // Oldest shape: a single flat `{ slots: [...] }` list.
   if (value.slots?.length) {
     return {
       certCatalog,
       sections: [{
         id: "migrated-staff",
         name: "Staff",
-        ranks: value.slots.map(s => ({
-          id: s.id,
-          rank: s.title || "",
-          userId: s.userId || "",
-          discordUsername: "",
-          name: s.displayName || "",
-          certifications: [],
-          roleIds: [],
-        })),
+        groups: [{
+          id: "migrated-staff-group",
+          name: "",
+          ranks: value.slots.map(s => ({
+            id: s.id,
+            rank: s.title || "",
+            userId: s.userId || "",
+            discordUsername: "",
+            name: s.displayName || "",
+            certifications: [],
+            roleIds: [],
+          })),
+        }],
       }],
     };
   }
+
   return { sections: [], certCatalog };
 }
 
@@ -112,6 +134,29 @@ export default function DepartmentPage() {
     }
   }
 
+  // Assign/vacate/promote save and sync immediately, matching Midnight
+  // Roster's "pick a name — it saves automatically" behavior, rather than
+  // waiting for a manual Save. Structural edits (renames, positions, cert
+  // ticks) stay batched behind the explicit Save button below.
+  async function saveAndSyncNow(nextSections) {
+    setSections(nextSections);
+    setStatus(null);
+    try {
+      await apiFetch(`/guilds/${guildId}/departments/${deptId}/data/roster`, {
+        method: "PUT",
+        body: { value: { sections: nextSections, certCatalog } },
+      });
+      const result = await apiFetch(`/guilds/${guildId}/departments/${deptId}/roster/sync`, { method: "POST" });
+      setStatus({
+        type: result.failed.length ? "error" : "ok",
+        message: `Saved. Added ${result.added} role${result.added === 1 ? "" : "s"}, removed ${result.removed}.` +
+          (result.failed.length ? ` Failed for ${result.failed.length}.` : ""),
+      });
+    } catch (err) {
+      setStatus({ type: "error", message: err.body?.message || err.message });
+    }
+  }
+
   if (error) return <div className="container"><div className="card error">{error.body?.message || error.message}</div></div>;
   if (!department || !sections || !roles) return <div className="container"><p className="muted">Loading...</p></div>;
 
@@ -151,7 +196,16 @@ export default function DepartmentPage() {
             <h2 id="manager-panel" style={{ marginTop: 32, scrollMarginTop: 80 }}>Manager Panel</h2>
             {status && <div className="card" style={{ borderColor: status.type === "error" ? "#f28b82" : undefined }}>{status.message}</div>}
 
-            <RosterEditor guildId={guildId} sections={sections} onChangeSections={setSections} roles={roles} certCatalog={certCatalog} driverLevels={driverLevels} />
+            <RosterEditor
+              guildId={guildId}
+              deptId={deptId}
+              sections={sections}
+              onChangeSections={setSections}
+              onAssign={saveAndSyncNow}
+              roles={roles}
+              certCatalog={certCatalog}
+              driverLevels={driverLevels}
+            />
 
             <div style={{ display: "flex", gap: 10, margin: "12px 0 24px" }}>
               <button className="btn" disabled={saving} onClick={saveRoster}>{saving ? "Saving..." : "Save roster"}</button>

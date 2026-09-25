@@ -5,7 +5,7 @@ const { attachSession, requireAuth } = require("../middleware/session");
 const { requireGuildAccess } = require("../middleware/guildAccess");
 const { requireDepartmentMember, requireDepartmentManage, requireDepartmentAdmin, computeTier } = require("../middleware/departmentAccess");
 const { canCreateDepartment, requireFeature } = require("../config/plans");
-const { addMemberRole, removeMemberRole, getAllGuildMembers, sendChannelMessage } = require("../discord/api");
+const { addMemberRole, removeMemberRole, getAllGuildMembers, getGuildMember, sendChannelMessage } = require("../discord/api");
 const { uniqueDepartmentSlug } = require("../db/slug");
 
 const router = express.Router({ mergeParams: true });
@@ -259,19 +259,21 @@ router.patch("/:deptId/applications/:appId", requireDepartmentManage, requireFea
   res.json({ application });
 });
 
-// Drops an approved applicant into the first vacant rank slot of the
-// admin-configured "placement" section (see PUT /:deptId/data/placement),
-// so approving someone actually seats them on the roster instead of just
-// swapping their Discord roles and leaving a manager to add them by hand.
-// Silently does nothing if no placement section is configured, the section
-// no longer exists, or every slot in it is already filled.
+// Drops an approved applicant into the admin-configured placement
+// {sectionId, rank} (see PUT /:deptId/data/placement) — mirrors Midnight
+// Roster's "Approval Placement" tool. Fills the first vacant post at that
+// rank; if every post at that rank is already filled, grows the section by
+// adding a new one rather than silently doing nothing, so approving people
+// never blocks on the roster having "enough" empty slots pre-made. Does
+// nothing if no placement is configured or the target section/rank no
+// longer exists (e.g. the section was deleted since).
 async function placeApprovedApplicant(departmentId, application) {
   const { rows: placementRows } = await pool.query(
     "SELECT value FROM department_data WHERE department_id = $1 AND data_key = 'placement'",
     [departmentId]
   );
-  const sectionId = placementRows[0]?.value?.sectionId;
-  if (!sectionId) return;
+  const { sectionId, rank } = placementRows[0]?.value || {};
+  if (!sectionId || !rank) return;
 
   const { rows: rosterRows } = await pool.query(
     "SELECT value FROM department_data WHERE department_id = $1 AND data_key = 'roster'",
@@ -281,12 +283,27 @@ async function placeApprovedApplicant(departmentId, application) {
   const roster = rosterRows[0].value;
   const section = (roster.sections || []).find(s => s.id === sectionId);
   if (!section) return;
-  const vacantRank = (section.ranks || []).find(r => !r.userId);
-  if (!vacantRank) return;
 
-  vacantRank.userId = application.user_id;
-  vacantRank.name = application.display_name;
-  vacantRank.since = new Date().toISOString().slice(0, 10);
+  section.ranks = section.ranks || [];
+  let target = section.ranks.find(r => r.rank === rank && !r.userId);
+  if (!target) {
+    target = { id: `rank-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, rank, certifications: [], roleIds: [] };
+    section.ranks.push(target);
+  }
+
+  // Nobody holds two posts — vacate anywhere else in the roster they were
+  // already assigned before seating them in the new spot.
+  for (const s of roster.sections || []) {
+    for (const r of s.ranks || []) {
+      if (r.userId === application.user_id && r !== target) {
+        r.userId = ""; r.name = ""; r.discordUsername = "";
+      }
+    }
+  }
+
+  target.userId = application.user_id;
+  target.name = application.display_name;
+  target.since = new Date().toISOString().slice(0, 10);
 
   await pool.query(
     "UPDATE department_data SET value = $1 WHERE department_id = $2 AND data_key = 'roster'",
@@ -423,15 +440,32 @@ router.get("/:deptId/sop/:fileId/download", requireDepartmentAdmin, requireFeatu
 });
 
 // Lets an admin post a message to a Discord channel through the bot without
-// leaving the dashboard — e.g. announcing a roster update. Deliberately
-// plain-text only (no embeds/mentions parsing) to keep this a simple utility
-// rather than a full bot-command surface.
+// leaving the dashboard — e.g. announcing a roster update. Mirrors Midnight
+// Roster's send-message tool: plain text, or a single embed with a footer
+// stamping who actually sent it (so "the bot said X" is traceable to an
+// admin without needing a message log of its own).
 router.post("/:deptId/announce", requireDepartmentAdmin, async (req, res) => {
-  const { channelId, message } = req.body;
+  const { channelId, message, title, asEmbed } = req.body;
   if (!channelId || !message || !message.trim()) {
     return res.status(400).json({ error: "channelId and message are required" });
   }
-  await sendChannelMessage(channelId, message.trim());
+  const content = message.trim().slice(0, 2000);
+
+  if (asEmbed) {
+    const member = await getGuildMember(req.guild.id, req.user.id);
+    const displayName = member?.nick || member?.user?.global_name || req.user.username;
+    await sendChannelMessage(channelId, {
+      embeds: [{
+        title: title ? title.trim().slice(0, 256) : undefined,
+        description: content,
+        color: 0xa855f7,
+        footer: { text: `${req.department.name} • sent by ${displayName}` },
+        timestamp: new Date().toISOString(),
+      }],
+    });
+  } else {
+    await sendChannelMessage(channelId, { content });
+  }
   res.json({ ok: true });
 });
 

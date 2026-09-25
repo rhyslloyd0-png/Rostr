@@ -129,8 +129,8 @@ export default function DepartmentPage() {
           <a className="action-pill" href="#roster">View Roster</a>
           {plan?.features?.sop && <a className="action-pill" href={`/sop/${guildId}/${deptId}`}>SOP Library</a>}
           {plan?.features?.loa && <a className="action-pill" href={`/loa/${guildId}/${deptId}`}>Leave Calendar</a>}
-          {canManage && <a className="action-pill primary" href="#manager-panel">Manager Panel</a>}
-          {canAdmin && <a className="action-pill primary" href="#admin-panel">Admin Panel</a>}
+          {canManage && <a className="action-pill manager-badge" href="#manager-panel">Manager Panel</a>}
+          {canAdmin && <a className="action-pill admin-badge" href="#admin-panel">Admin Panel</a>}
         </div>
 
         {sections.length > 0 && (

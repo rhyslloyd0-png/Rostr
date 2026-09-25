@@ -15,17 +15,33 @@ async function apiFetchRaw(path, options = {}) {
   return resp.status === 204 ? null : resp.json();
 }
 
-const TABS = [
-  { key: "settings", label: "Department settings" },
-  { key: "roles", label: "Discord role mapping" },
-  { key: "certifications", label: "Certifications" },
-  { key: "driverLevels", label: "Driver levels" },
-  { key: "questions", label: "Application questions" },
-  { key: "applications", label: "Applications" },
-  { key: "placement", label: "Application approval placement" },
-  { key: "announce", label: "Send a message to Discord" },
-  { key: "sop", label: "SOP documents" },
+// Mirrors Midnight Roster's admin toolbar: one row of icon-only buttons,
+// each opening a modal rather than a stacked always-open section.
+const TOOLS = [
+  { key: "settings", icon: "⚙", label: "Department settings" },
+  { key: "roles", icon: "🛡", label: "Discord role mapping" },
+  { key: "certifications", icon: "🎖", label: "Certifications" },
+  { key: "driverLevels", icon: "🚗", label: "Driver levels" },
+  { key: "questions", icon: "❓", label: "Application questions" },
+  { key: "applications", icon: "📥", label: "Applications" },
+  { key: "placement", icon: "✅", label: "Approval placement" },
+  { key: "announce", icon: "📨", label: "Send message" },
+  { key: "sop", icon: "📄", label: "SOP documents" },
 ];
+
+function Modal({ title, onClose, children }) {
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="card modal-content modal-content-wide" onClick={e => e.stopPropagation()}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+          <h2 style={{ margin: 0 }}>{title}</h2>
+          <button className="btn secondary" onClick={onClose}>Close</button>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}
 
 function BannerUpload({ guildId, deptId, hasBanner, onSaved }) {
   const [uploading, setUploading] = useState(false);
@@ -239,19 +255,27 @@ function DriverLevelsTab({ guildId, deptId, driverLevels, onChange }) {
 
 function PlacementTab({ guildId, deptId, sections }) {
   const [sectionId, setSectionId] = useState(null);
+  const [rank, setRank] = useState("");
   const [loaded, setLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
     apiFetch(`/guilds/${guildId}/departments/${deptId}/data/placement`)
-      .then(data => { setSectionId(data.value.sectionId || ""); setLoaded(true); });
+      .then(data => {
+        setSectionId(data.value.sectionId || "");
+        setRank(data.value.rank || "");
+        setLoaded(true);
+      });
   }, [guildId, deptId]);
 
   async function save() {
     setSaving(true);
     try {
-      await apiFetch(`/guilds/${guildId}/departments/${deptId}/data/placement`, { method: "PUT", body: { value: { sectionId: sectionId || null } } });
+      await apiFetch(`/guilds/${guildId}/departments/${deptId}/data/placement`, {
+        method: "PUT",
+        body: { value: sectionId && rank ? { sectionId, rank } : {} },
+      });
       setSaved(true);
     } finally {
       setSaving(false);
@@ -260,16 +284,38 @@ function PlacementTab({ guildId, deptId, sections }) {
 
   if (!loaded) return <p className="muted">Loading...</p>;
 
+  const activeSection = sections.find(s => s.id === sectionId);
+  const rankOptions = [...new Set((activeSection?.ranks || []).map(r => r.rank).filter(Boolean))];
+
   return (
     <div className="card">
-      <p className="muted">When an application is approved, RostR fills the first vacant rank slot in this section with the applicant automatically.</p>
+      <p className="muted">
+        When an application is approved, RostR seats the applicant into this rank. If every post at that rank is
+        already filled, it adds a new one rather than skipping placement.
+      </p>
       <div className="field">
-        <label>Placement section</label>
-        <select value={sectionId} onChange={e => { setSectionId(e.target.value); setSaved(false); }}>
+        <label>Section</label>
+        <select
+          value={sectionId}
+          onChange={e => { setSectionId(e.target.value); setRank(""); setSaved(false); }}
+        >
           <option value="">— don't auto-place, just swap roles —</option>
           {sections.map(s => <option key={s.id} value={s.id}>{s.name || "(unnamed section)"}</option>)}
         </select>
       </div>
+      {sectionId && (
+        <div className="field">
+          <label>Rank</label>
+          {rankOptions.length ? (
+            <select value={rank} onChange={e => { setRank(e.target.value); setSaved(false); }}>
+              <option value="">— choose a rank —</option>
+              {rankOptions.map(r => <option key={r} value={r}>{r}</option>)}
+            </select>
+          ) : (
+            <p className="muted">This section has no ranks yet — add one in the roster first.</p>
+          )}
+        </div>
+      )}
       <button className="btn" disabled={saving} onClick={save}>{saving ? "Saving..." : "Save"}</button>
       {saved && <span className="muted" style={{ marginLeft: 10 }}>Saved.</span>}
     </div>
@@ -279,7 +325,9 @@ function PlacementTab({ guildId, deptId, sections }) {
 function AnnounceTab({ guildId, deptId }) {
   const [channels, setChannels] = useState(null);
   const [channelId, setChannelId] = useState("");
+  const [title, setTitle] = useState("");
   const [message, setMessage] = useState("");
+  const [asEmbed, setAsEmbed] = useState(true);
   const [sending, setSending] = useState(false);
   const [status, setStatus] = useState(null);
 
@@ -297,9 +345,13 @@ function AnnounceTab({ guildId, deptId }) {
     setSending(true);
     setStatus(null);
     try {
-      await apiFetch(`/guilds/${guildId}/departments/${deptId}/announce`, { method: "POST", body: { channelId, message } });
-      setStatus({ type: "ok", message: "Message sent." });
+      await apiFetch(`/guilds/${guildId}/departments/${deptId}/announce`, {
+        method: "POST",
+        body: { channelId, title: asEmbed ? title : undefined, message, asEmbed },
+      });
+      setStatus({ type: "ok", message: "Sent." });
       setMessage("");
+      setTitle("");
     } catch (err) {
       setStatus({ type: "error", message: err.body?.message || err.message });
     } finally {
@@ -315,6 +367,7 @@ function AnnounceTab({ guildId, deptId }) {
         <p className="muted">No text channels found — make sure the bot can see at least one channel in this server.</p>
       ) : (
         <>
+          <p className="muted">Posts into the channel as the bot. Everyone in that channel sees it — there's no undo from here, delete it in Discord instead.</p>
           <div className="field">
             <label>Channel</label>
             <select value={channelId} onChange={e => setChannelId(e.target.value)}>
@@ -322,8 +375,20 @@ function AnnounceTab({ guildId, deptId }) {
             </select>
           </div>
           <div className="field">
+            <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
+              <input type="checkbox" checked={asEmbed} onChange={e => setAsEmbed(e.target.checked)} />
+              Send as an embed
+            </label>
+          </div>
+          {asEmbed && (
+            <div className="field">
+              <label>Title (optional)</label>
+              <input value={title} onChange={e => setTitle(e.target.value)} maxLength={256} />
+            </div>
+          )}
+          <div className="field">
             <label>Message</label>
-            <textarea rows={4} value={message} onChange={e => setMessage(e.target.value)} placeholder="Message to post in Discord..." />
+            <textarea rows={4} value={message} onChange={e => setMessage(e.target.value)} maxLength={2000} placeholder="Message to post in Discord..." />
           </div>
           <button className="btn" disabled={sending || !message.trim()} onClick={send}>{sending ? "Sending..." : "Send message"}</button>
           {status && <p className={status.type === "error" ? "error" : "muted"} style={{ marginTop: 8 }}>{status.message}</p>}
@@ -337,57 +402,46 @@ export default function AdminPanel({
   guildId, deptId, department, roles, sections, plan,
   certCatalog, onCertCatalogChange, driverLevels, onDriverLevelsChange, onSaved,
 }) {
-  const [activeTab, setActiveTab] = useState("settings");
+  const [openTool, setOpenTool] = useState(null);
+
+  const gated = (feature, content) =>
+    plan?.features?.[feature]
+      ? content
+      : <div className="card"><p className="muted">This isn't available on the {plan?.key} plan.</p></div>;
+
+  const activeTool = TOOLS.find(t => t.key === openTool);
 
   return (
     <div>
-      <div className="admin-tabs">
-        {TABS.map(t => (
-          <button
-            key={t.key}
-            className={`admin-tab${activeTab === t.key ? " admin-tab-active" : ""}`}
-            onClick={() => setActiveTab(t.key)}
-          >
-            {t.label}
+      <div className="admin-toolbar">
+        {TOOLS.map(t => (
+          <button key={t.key} className="btn-icon" title={t.label} onClick={() => setOpenTool(t.key)}>
+            <span aria-hidden="true">{t.icon}</span>
           </button>
         ))}
       </div>
 
-      <div className="admin-tab-content">
-        {activeTab === "settings" && (
-          <DepartmentSettingsTab guildId={guildId} deptId={deptId} department={department} onSaved={onSaved} />
-        )}
-        {activeTab === "roles" && (
-          <RoleMappingTab guildId={guildId} deptId={deptId} department={department} roles={roles} onSaved={onSaved} />
-        )}
-        {activeTab === "certifications" && (
-          <CertificationsTab certCatalog={certCatalog} onChange={onCertCatalogChange} />
-        )}
-        {activeTab === "driverLevels" && (
-          <DriverLevelsTab guildId={guildId} deptId={deptId} driverLevels={driverLevels} onChange={onDriverLevelsChange} />
-        )}
-        {activeTab === "questions" && (
-          plan?.features?.applications
-            ? <QuestionEditor guildId={guildId} deptId={deptId} />
-            : <div className="card"><p className="muted">Applications aren't available on the {plan?.key} plan.</p></div>
-        )}
-        {activeTab === "applications" && (
-          plan?.features?.applications
-            ? <ApplicationsPanel guildId={guildId} deptId={deptId} showQuestionEditor={false} />
-            : <div className="card"><p className="muted">Applications aren't available on the {plan?.key} plan.</p></div>
-        )}
-        {activeTab === "placement" && (
-          plan?.features?.applications
-            ? <PlacementTab guildId={guildId} deptId={deptId} sections={sections} />
-            : <div className="card"><p className="muted">Applications aren't available on the {plan?.key} plan.</p></div>
-        )}
-        {activeTab === "announce" && <AnnounceTab guildId={guildId} deptId={deptId} />}
-        {activeTab === "sop" && (
-          plan?.features?.sop
-            ? <SopPanel guildId={guildId} deptId={deptId} />
-            : <div className="card"><p className="muted">The SOP library isn't available on the {plan?.key} plan.</p></div>
-        )}
-      </div>
+      {activeTool && (
+        <Modal title={activeTool.label} onClose={() => setOpenTool(null)}>
+          {openTool === "settings" && (
+            <DepartmentSettingsTab guildId={guildId} deptId={deptId} department={department} onSaved={onSaved} />
+          )}
+          {openTool === "roles" && (
+            <RoleMappingTab guildId={guildId} deptId={deptId} department={department} roles={roles} onSaved={onSaved} />
+          )}
+          {openTool === "certifications" && (
+            <CertificationsTab certCatalog={certCatalog} onChange={onCertCatalogChange} />
+          )}
+          {openTool === "driverLevels" && (
+            <DriverLevelsTab guildId={guildId} deptId={deptId} driverLevels={driverLevels} onChange={onDriverLevelsChange} />
+          )}
+          {openTool === "questions" && gated("applications", <QuestionEditor guildId={guildId} deptId={deptId} />)}
+          {openTool === "applications" && gated("applications", <ApplicationsPanel guildId={guildId} deptId={deptId} showQuestionEditor={false} />)}
+          {openTool === "placement" && gated("applications", <PlacementTab guildId={guildId} deptId={deptId} sections={sections} />)}
+          {openTool === "announce" && <AnnounceTab guildId={guildId} deptId={deptId} />}
+          {openTool === "sop" && gated("sop", <SopPanel guildId={guildId} deptId={deptId} />)}
+        </Modal>
+      )}
     </div>
   );
 }

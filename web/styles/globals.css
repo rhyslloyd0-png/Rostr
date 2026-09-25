@@ -34,7 +34,7 @@ a { color: inherit; }
 .btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .btn.secondary { background: #262b36; }
 .btn.large { padding: 14px 28px; font-size: 16px; border-radius: 10px; }
-input, select {
+input, select, textarea {
   background: #0f1115;
   border: 1px solid #333947;
   color: #e8e9ec;
@@ -42,6 +42,7 @@ input, select {
   padding: 8px 10px;
   font-size: 14px;
   width: 100%;
+  font-family: inherit;
 }
 label { display: block; font-size: 13px; margin-bottom: 6px; color: #a5abba; }
 .field { margin-bottom: 16px; }
@@ -229,6 +230,8 @@ label { display: block; font-size: 13px; margin-bottom: 6px; color: #a5abba; }
   color: #c4c8d4;
 }
 .action-pill.primary { background: var(--brand-blue); color: white; border-color: var(--brand-blue); }
+.action-pill.admin-badge { background: #14b8a6; color: #062420; border-color: #14b8a6; }
+.action-pill.manager-badge { background: #eab308; color: #2a2000; border-color: #eab308; }
 .section-jump { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 24px; }
 
 /* Department banner */
@@ -373,16 +376,30 @@ label { display: block; font-size: 13px; margin-bottom: 6px; color: #a5abba; }
   .loa-cal-cell { min-height: 48px; padding: 4px; }
 }
 
-.admin-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
-.admin-tab {
+.admin-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 16px;
+  margin-bottom: 20px;
   background: #171a21;
   border: 1px solid #262b36;
-  color: #c4c8d4;
-  border-radius: 999px;
-  padding: 6px 14px;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
+  border-radius: 12px;
 }
-.admin-tab:hover { border-color: #3a4152; }
-.admin-tab-active { background: var(--brand-blue); border-color: var(--brand-blue); color: #fff; }
+.btn-icon {
+  width: 46px;
+  height: 46px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--brand-blue);
+  border-radius: 10px;
+  background: transparent;
+  color: #e8e9ec;
+  font-size: 20px;
+  cursor: pointer;
+  transition: background 0.12s, transform 0.05s;
+}
+.btn-icon:hover { background: rgba(124,58,237,0.18); }
+.btn-icon:active { transform: scale(0.93); }
+.modal-content-wide { max-width: 640px; max-height: 85vh; overflow-y: auto; }

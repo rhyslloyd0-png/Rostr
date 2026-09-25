@@ -88,11 +88,11 @@ async function setMemberNickname(guildId, userId, nickname) {
   return resp.ok;
 }
 
-async function sendChannelMessage(channelId, content) {
+async function sendChannelMessage(channelId, payload) {
   const resp = await discordFetch(`${API_BASE}/channels/${channelId}/messages`, {
     method: "POST",
     headers: { ...botHeaders(), "Content-Type": "application/json" },
-    body: JSON.stringify({ content }),
+    body: JSON.stringify(payload),
   });
   if (!resp.ok) {
     const body = await resp.json().catch(() => ({}));

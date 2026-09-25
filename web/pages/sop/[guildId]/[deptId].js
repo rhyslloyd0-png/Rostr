@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
 import { apiFetch, loginUrl } from "../../../lib/api";
+import AppHeader from "../../../components/AppHeader";
 
 // See lib/api.js — routed through this app's own /api/* proxy so the
 // session cookie stays first-party instead of a blocked third-party cookie.
@@ -36,19 +37,24 @@ export default function SopLibrary() {
 
   if (needsLogin) {
     return (
-      <div className="container">
-        <div className="card">
-          <p>Sign in with Discord to view this department's documents.</p>
-          <a className="btn" href={loginUrl({ mode: "identify", returnTo: `/sop/${guildId}/${deptId}` })}>Sign in with Discord</a>
+      <>
+        <AppHeader guildId={guildId} activeDeptSlug={deptId} />
+        <div className="container">
+          <div className="card">
+            <p>Sign in with Discord to view this department's documents.</p>
+            <a className="btn" href={loginUrl({ mode: "identify", returnTo: `/sop/${guildId}/${deptId}` })}>Sign in with Discord</a>
+          </div>
         </div>
-      </div>
+      </>
     );
   }
 
-  if (error) return <div className="container"><div className="card error">{error.body?.message || error.message}</div></div>;
-  if (!department || !files) return <div className="container"><p className="muted">Loading...</p></div>;
+  if (error) return <><AppHeader guildId={guildId} activeDeptSlug={deptId} /><div className="container"><div className="card error">{error.body?.message || error.message}</div></div></>;
+  if (!department || !files) return <><AppHeader guildId={guildId} activeDeptSlug={deptId} /><div className="container"><p className="muted">Loading...</p></div></>;
 
   return (
+    <>
+    <AppHeader guildId={guildId} activeDeptSlug={deptId} />
     <div className="container">
       <h1>{department.name} — SOP documents</h1>
       {files.length === 0 && <p className="muted">No documents have been uploaded yet.</p>}
@@ -64,5 +70,6 @@ export default function SopLibrary() {
         </div>
       ))}
     </div>
+    </>
   );
 }

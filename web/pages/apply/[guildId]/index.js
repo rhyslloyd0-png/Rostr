@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
 import Link from "next/link";
 import { apiFetch, loginUrl } from "../../../lib/api";
+import AppHeader from "../../../components/AppHeader";
 
 export default function ApplyGuildHome() {
   const router = useRouter();
@@ -23,27 +24,33 @@ export default function ApplyGuildHome() {
 
   if (needsLogin) {
     return (
-      <div className="container">
-        <div className="card">
-          <p>Sign in with Discord to see and submit applications.</p>
-          <a className="btn" href={loginUrl({ mode: "identify", returnTo: `/apply/${guildId}` })}>Sign in with Discord</a>
+      <>
+        <AppHeader guildId={guildId} />
+        <div className="container">
+          <div className="card">
+            <p>Sign in with Discord to see and submit applications.</p>
+            <a className="btn" href={loginUrl({ mode: "identify", returnTo: `/apply/${guildId}` })}>Sign in with Discord</a>
+          </div>
         </div>
-      </div>
+      </>
     );
   }
 
-  if (error) return <div className="container"><div className="card error">{error.message}</div></div>;
-  if (!data) return <div className="container"><p className="muted">Loading...</p></div>;
+  if (error) return <><AppHeader guildId={guildId} /><div className="container"><div className="card error">{error.message}</div></div></>;
+  if (!data) return <><AppHeader guildId={guildId} /><div className="container"><p className="muted">Loading...</p></div></>;
 
   return (
-    <div className="container">
-      <h1>{data.guildName} — Applications</h1>
-      {data.departments.length === 0 && <p className="muted">No departments are accepting applications right now.</p>}
-      {data.departments.map(d => (
-        <Link key={d.id} href={`/apply/${guildId}/${d.slug}`} className="card" style={{ display: "block" }}>
-          {d.name}
-        </Link>
-      ))}
-    </div>
+    <>
+      <AppHeader guildId={guildId} />
+      <div className="container">
+        <h1>{data.guildName} — Applications</h1>
+        {data.departments.length === 0 && <p className="muted">No departments are accepting applications right now.</p>}
+        {data.departments.map(d => (
+          <Link key={d.id} href={`/apply/${guildId}/${d.slug}`} className="card" style={{ display: "block" }}>
+            {d.name}
+          </Link>
+        ))}
+      </div>
+    </>
   );
 }

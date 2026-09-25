@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
 import Link from "next/link";
 import { apiFetch } from "../../../lib/api";
+import AppHeader from "../../../components/AppHeader";
 
 export default function GuildDashboard() {
   const router = useRouter();
@@ -31,12 +32,14 @@ export default function GuildDashboard() {
     return `${paymentLink}?client_reference_id=${guildId}`;
   }
 
-  if (error) return <div className="container"><div className="card error">{error.message}</div></div>;
-  if (!info || !departments) return <div className="container"><p className="muted">Loading...</p></div>;
+  if (error) return <><AppHeader guildId={guildId} /><div className="container"><div className="card error">{error.message}</div></div></>;
+  if (!info || !departments) return <><AppHeader guildId={guildId} /><div className="container"><p className="muted">Loading...</p></div></>;
 
   const atLimit = info.plan.max_departments !== -1 && info.departmentCount >= info.plan.max_departments;
 
   return (
+    <>
+    <AppHeader guildId={guildId} />
     <div className="container">
       <h1>{info.guild.name}</h1>
       <div className="card">
@@ -77,5 +80,6 @@ export default function GuildDashboard() {
         <Link className="btn" href={`/dashboard/${guildId}/setup`}>+ Add department</Link>
       )}
     </div>
+    </>
   );
 }

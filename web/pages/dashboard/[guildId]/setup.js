@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
 import { apiFetch } from "../../../lib/api";
+import AppHeader from "../../../components/AppHeader";
 
 export default function SetupDepartment() {
   const router = useRouter();
@@ -37,6 +38,8 @@ export default function SetupDepartment() {
   }
 
   return (
+    <>
+    <AppHeader guildId={guildId} />
     <div className="container">
       <h1>Set up a department</h1>
       <p className="muted">Every field below is picked from your server's own roles — nothing to configure outside this page.</p>
@@ -70,5 +73,6 @@ export default function SetupDepartment() {
         </form>
       )}
     </div>
+    </>
   );
 }

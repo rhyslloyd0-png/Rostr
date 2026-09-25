@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
 import { apiFetch, loginUrl } from "../../../lib/api";
+import AppHeader from "../../../components/AppHeader";
 
 export default function ApplyDepartment() {
   const router = useRouter();
@@ -48,21 +49,26 @@ export default function ApplyDepartment() {
 
   if (needsLogin) {
     return (
-      <div className="container">
-        <div className="card">
-          <p>Sign in with Discord to apply.</p>
-          <a className="btn" href={loginUrl({ mode: "identify", returnTo: `/apply/${guildId}/${deptId}` })}>Sign in with Discord</a>
+      <>
+        <AppHeader guildId={guildId} activeDeptSlug={deptId} />
+        <div className="container">
+          <div className="card">
+            <p>Sign in with Discord to apply.</p>
+            <a className="btn" href={loginUrl({ mode: "identify", returnTo: `/apply/${guildId}/${deptId}` })}>Sign in with Discord</a>
+          </div>
         </div>
-      </div>
+      </>
     );
   }
 
-  if (error) return <div className="container"><div className="card error">{error.body?.message || error.message}</div></div>;
-  if (!department || !questions || !myApplications) return <div className="container"><p className="muted">Loading...</p></div>;
+  if (error) return <><AppHeader guildId={guildId} activeDeptSlug={deptId} /><div className="container"><div className="card error">{error.body?.message || error.message}</div></div></>;
+  if (!department || !questions || !myApplications) return <><AppHeader guildId={guildId} activeDeptSlug={deptId} /><div className="container"><p className="muted">Loading...</p></div></>;
 
   const pending = myApplications.find(a => a.status === "pending");
 
   return (
+    <>
+    <AppHeader guildId={guildId} activeDeptSlug={deptId} />
     <div className="container">
       <h1>Apply — {department.name}</h1>
 
@@ -107,5 +113,6 @@ export default function ApplyDepartment() {
 
       {pending && !submitted && <div className="card">You already have a pending application for this department.</div>}
     </div>
+    </>
   );
 }

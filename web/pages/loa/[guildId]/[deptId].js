@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/router";
 import { apiFetch, loginUrl } from "../../../lib/api";
+import AppHeader from "../../../components/AppHeader";
 
 export default function RequestLoa() {
   const router = useRouter();
@@ -52,19 +53,24 @@ export default function RequestLoa() {
 
   if (needsLogin) {
     return (
-      <div className="container">
-        <div className="card">
-          <p>Sign in with Discord to request leave.</p>
-          <a className="btn" href={loginUrl({ mode: "identify", returnTo: `/loa/${guildId}/${deptId}` })}>Sign in with Discord</a>
+      <>
+        <AppHeader guildId={guildId} activeDeptSlug={deptId} />
+        <div className="container">
+          <div className="card">
+            <p>Sign in with Discord to request leave.</p>
+            <a className="btn" href={loginUrl({ mode: "identify", returnTo: `/loa/${guildId}/${deptId}` })}>Sign in with Discord</a>
+          </div>
         </div>
-      </div>
+      </>
     );
   }
 
-  if (error) return <div className="container"><div className="card error">{error.body?.message || error.message}</div></div>;
-  if (!department || !requests) return <div className="container"><p className="muted">Loading...</p></div>;
+  if (error) return <><AppHeader guildId={guildId} activeDeptSlug={deptId} /><div className="container"><div className="card error">{error.body?.message || error.message}</div></div></>;
+  if (!department || !requests) return <><AppHeader guildId={guildId} activeDeptSlug={deptId} /><div className="container"><p className="muted">Loading...</p></div></>;
 
   return (
+    <>
+    <AppHeader guildId={guildId} activeDeptSlug={deptId} />
     <div className="container">
       <h1>Request leave — {department.name}</h1>
 
@@ -93,5 +99,6 @@ export default function RequestLoa() {
         </div>
       ))}
     </div>
+    </>
   );
 }

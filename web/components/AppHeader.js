@@ -12,9 +12,12 @@ export default function AppHeader({ guildId, activeDeptSlug, homeHref }) {
   const [user, setUser] = useState(null);
 
   useEffect(() => {
-    if (!guildId) return;
-    apiFetch(`/staff/${guildId}/departments`).then(d => setDepartments(d.departments)).catch(() => setDepartments([]));
     apiFetch("/auth/me").then(d => setUser(d.user)).catch(() => setUser(null));
+  }, []);
+
+  useEffect(() => {
+    if (!guildId) { setDepartments([]); return; }
+    apiFetch(`/staff/${guildId}/departments`).then(d => setDepartments(d.departments)).catch(() => setDepartments([]));
   }, [guildId]);
 
   async function logout() {

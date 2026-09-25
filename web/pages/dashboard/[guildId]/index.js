@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/router";
 import Link from "next/link";
 import { apiFetch } from "../../../lib/api";
@@ -11,8 +11,9 @@ export default function GuildDashboard() {
   const [info, setInfo] = useState(null);
   const [departments, setDepartments] = useState(null);
   const [error, setError] = useState(null);
+  const [deletingId, setDeletingId] = useState(null);
 
-  useEffect(() => {
+  const load = useCallback(() => {
     if (!guildId) return;
     Promise.all([
       apiFetch(`/guilds/${guildId}`),
@@ -24,6 +25,21 @@ export default function GuildDashboard() {
       })
       .catch(setError);
   }, [guildId]);
+
+  useEffect(load, [load]);
+
+  async function deleteDepartment(d) {
+    if (!confirm(`Delete "${d.name}"? This permanently removes its roster, applications, leave requests, and SOP documents. This can't be undone.`)) return;
+    setDeletingId(d.id);
+    try {
+      await apiFetch(`/guilds/${guildId}/departments/${d.slug}`, { method: "DELETE" });
+      load();
+    } catch (err) {
+      alert(err.body?.message || err.message);
+    } finally {
+      setDeletingId(null);
+    }
+  }
 
   // Straight to the Stripe Payment Link — client_reference_id carries the
   // guild ID through checkout so the webhook (routes/billing.js) knows
@@ -59,9 +75,18 @@ export default function GuildDashboard() {
 
       <h2>Departments</h2>
       {departments.map(d => (
-        <Link key={d.id} href={`/dashboard/${guildId}/departments/${d.slug}`} className="card" style={{ display: "block" }}>
-          {d.name}
-        </Link>
+        <div key={d.id} className="card" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <Link href={`/dashboard/${guildId}/departments/${d.slug}`} style={{ flex: 1 }}>{d.name}</Link>
+          {info.isOwner && (
+            <button
+              className="btn secondary"
+              disabled={deletingId === d.id}
+              onClick={() => deleteDepartment(d)}
+            >
+              {deletingId === d.id ? "Deleting..." : "Delete"}
+            </button>
+          )}
+        </div>
       ))}
 
       {atLimit ? (

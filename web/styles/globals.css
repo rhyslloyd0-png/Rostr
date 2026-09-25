@@ -415,3 +415,29 @@ label { display: block; font-size: 13px; margin-bottom: 6px; color: #a5abba; }
   text-align: left;
 }
 .rank-promote-link:hover { color: #fff; }
+
+.roster-section-head { display: flex; align-items: center; gap: 10px; }
+.roster-section-mark { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
+.roster-section-title { margin: 0; font-size: 22px; font-weight: 700; letter-spacing: 0.2px; }
+.roster-group-label { font-size: 13px; font-weight: 700; color: #a5abba; text-transform: uppercase; letter-spacing: 0.06em; margin: 4px 0 10px; }
+.roster-table-wrap { overflow-x: auto; margin-bottom: 4px; }
+.roster-table { width: 100%; border-collapse: collapse; min-width: 760px; }
+.roster-table thead th {
+  text-align: left;
+  padding: 6px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #6b7180;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  border-bottom: 1px solid #262b36;
+  white-space: nowrap;
+}
+.roster-table tbody td { padding: 8px 10px; vertical-align: middle; border-top: 1px solid #262b36; }
+.roster-table tbody tr:hover { background: rgba(199, 125, 255, 0.05); }
+.roster-table .rank-cell { color: #e8e9ec; font-weight: 500; white-space: nowrap; }
+.roster-table .callsign-cell { color: #e0a640; font-family: "SFMono-Regular", Consolas, monospace; white-space: nowrap; }
+.roster-table .discord-cell { color: #6b7180; font-family: "SFMono-Regular", Consolas, monospace; font-size: 12px; white-space: nowrap; }
+.roster-table .since-cell { color: #6b7180; font-size: 13px; white-space: nowrap; }
+.roster-table .name-cell.vacant { color: #d97878; font-style: italic; }
+.roster-table .row-remove-cell { width: 1%; white-space: nowrap; }

@@ -3,20 +3,22 @@ import { useState } from "react";
 function PostRow({ post }) {
   const filled = !!post.userId;
   return (
-    <tr style={{ borderTop: "1px solid #262b36" }}>
-      <td style={{ padding: "8px" }}>{post.rank}</td>
-      <td style={{ padding: "8px", color: "#e0a640", fontFamily: "monospace" }}>{post.callsign || "—"}</td>
-      <td style={{ padding: "8px" }}>{filled ? (post.name || "—") : <span className="muted" style={{ fontStyle: "italic" }}>Vacant</span>}</td>
-      <td style={{ padding: "8px" }} className="muted">{filled ? (post.discordUsername ? `@${post.discordUsername}` : post.userId) : "—"}</td>
-      <td style={{ padding: "8px" }} className="muted">{post.driverLevel || "—"}</td>
-      <td style={{ padding: "8px" }}>
+    <tr>
+      <td className="rank-cell">{post.rank}</td>
+      <td className="callsign-cell">{post.callsign || "—"}</td>
+      <td className={filled ? "name-cell" : "name-cell vacant"}>{filled ? (post.name || "—") : "Vacant"}</td>
+      <td className="discord-cell">{filled ? (post.discordUsername ? `@${post.discordUsername}` : post.userId) : "—"}</td>
+      <td className="muted">{post.driverLevel || "—"}</td>
+      <td>
         {(post.certifications || []).length
-          ? post.certifications.map(c => (
-              <span key={c} className="tag" style={{ marginRight: 4 }}>{c}</span>
-            ))
+          ? (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+              {post.certifications.map(c => <span key={c} className="tag">{c}</span>)}
+            </div>
+          )
           : <span className="muted">—</span>}
       </td>
-      <td style={{ padding: "8px" }} className="muted">{post.since || "—"}</td>
+      <td className="since-cell">{post.since || "—"}</td>
     </tr>
   );
 }
@@ -26,23 +28,25 @@ function Group({ group }) {
   if (!ranks.length) return null;
   return (
     <div style={{ marginBottom: 16 }}>
-      {group.name && <div className="muted" style={{ fontSize: 13, fontWeight: 600, margin: "8px 0 4px 24px" }}>{group.name}</div>}
-      <table style={{ width: "100%", borderCollapse: "collapse", marginTop: 4 }}>
-        <thead>
-          <tr style={{ textAlign: "left", color: "#6b7180", fontSize: 12, textTransform: "uppercase" }}>
-            <th style={{ padding: "4px 8px" }}>Rank</th>
-            <th style={{ padding: "4px 8px" }}>Callsign</th>
-            <th style={{ padding: "4px 8px" }}>Name</th>
-            <th style={{ padding: "4px 8px" }}>Discord</th>
-            <th style={{ padding: "4px 8px" }}>Driver Level</th>
-            <th style={{ padding: "4px 8px" }}>Certifications</th>
-            <th style={{ padding: "4px 8px" }}>Since</th>
-          </tr>
-        </thead>
-        <tbody>
-          {ranks.map(r => <PostRow key={r.id} post={r} />)}
-        </tbody>
-      </table>
+      {group.name && <div className="roster-group-label" style={{ paddingLeft: 24 }}>{group.name}</div>}
+      <div className="roster-table-wrap">
+        <table className="roster-table">
+          <thead>
+            <tr>
+              <th>Rank</th>
+              <th>Callsign</th>
+              <th>Name</th>
+              <th>Discord</th>
+              <th>Driver Level</th>
+              <th>Certifications</th>
+              <th>Since</th>
+            </tr>
+          </thead>
+          <tbody>
+            {ranks.map(r => <PostRow key={r.id} post={r} />)}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
@@ -52,15 +56,15 @@ function Section({ section }) {
   const groups = section.groups || [];
 
   return (
-    <div id={`section-${section.id}`} style={{ marginBottom: 24, scrollMarginTop: 80 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }} onClick={() => setOpen(o => !o)}>
-        <span style={{ transform: open ? "rotate(0deg)" : "rotate(-90deg)", display: "inline-block", transition: "transform 0.15s" }}>▾</span>
-        <span style={{ width: 10, height: 10, borderRadius: 2, background: section.color || "#5fb4ff", display: "inline-block" }} />
-        <h3 style={{ margin: 0 }}>{section.name}</h3>
+    <div id={`section-${section.id}`} style={{ marginBottom: 28, scrollMarginTop: 80 }}>
+      <div className="roster-section-head" style={{ cursor: "pointer" }} onClick={() => setOpen(o => !o)}>
+        <span style={{ transform: open ? "rotate(0deg)" : "rotate(-90deg)", display: "inline-block", transition: "transform 0.15s", color: "#6b7180" }}>▾</span>
+        <span className="roster-section-mark" style={{ background: section.color || "#5fb4ff" }} />
+        <h3 className="roster-section-title">{section.name}</h3>
       </div>
-      {section.description && <p className="muted" style={{ margin: "4px 0 12px 24px" }}>{section.description}</p>}
+      {section.description && <p className="muted" style={{ margin: "4px 0 14px 28px" }}>{section.description}</p>}
 
-      {open && groups.map(g => <Group key={g.id} group={g} />)}
+      {open && <div style={{ marginTop: 12 }}>{groups.map(g => <Group key={g.id} group={g} />)}</div>}
     </div>
   );
 }

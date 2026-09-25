@@ -261,13 +261,13 @@ function RankRow({ post, sectionId, groupId, roles, certCatalog, driverLevels, m
 
   return (
     <>
-      <tr style={{ borderTop: "1px solid #262b36" }}>
-        <td style={{ padding: 6 }}>
+      <tr>
+        <td className="rank-cell">
           {canEditStructure ? (
-            <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
-              <input style={{ minWidth: 120 }} value={post.rank} onChange={e => patch({ rank: e.target.value })} placeholder="Rank title" />
+            <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+              <input style={{ minWidth: 110, width: 110 }} value={post.rank} onChange={e => patch({ rank: e.target.value })} placeholder="Rank title" />
               {post.userId && (
-                <button className="btn secondary" style={{ padding: "4px 8px", fontSize: 12 }} onClick={() => onPromote({ ...post, sectionId })}>
+                <button className="btn secondary" style={{ padding: "4px 8px", fontSize: 12, whiteSpace: "nowrap" }} onClick={() => onPromote({ ...post, sectionId })}>
                   Change rank
                 </button>
               )}
@@ -284,36 +284,36 @@ function RankRow({ post, sectionId, groupId, roles, certCatalog, driverLevels, m
             <span>{post.rank || <span className="muted">—</span>}</span>
           )}
         </td>
-        <td style={{ padding: 6 }}>
+        <td className="callsign-cell">
           {canEditStructure ? (
-            <input style={{ width: 90 }} value={post.callsign || ""} onChange={e => patch({ callsign: e.target.value })} placeholder="—" />
+            <input style={{ width: 80 }} value={post.callsign || ""} onChange={e => patch({ callsign: e.target.value })} placeholder="—" />
           ) : (
-            <span style={{ color: "#e0a640", fontFamily: "monospace" }}>{post.callsign || "—"}</span>
+            post.callsign || "—"
           )}
         </td>
-        <td style={{ padding: 6, minWidth: 170 }}>
+        <td style={{ minWidth: 170 }}>
           <AssignSearch post={post} members={members} onAssign={m => onAssign(sectionId, groupId, post.id, m)} />
         </td>
-        <td style={{ padding: 6 }} className="muted">{post.userId ? (post.discordUsername ? `@${post.discordUsername}` : post.userId) : "—"}</td>
-        <td style={{ padding: 6 }}>
-          <select style={{ width: 70 }} value={post.driverLevel || ""} onChange={e => patch({ driverLevel: e.target.value })}>
+        <td className="discord-cell">{post.userId ? (post.discordUsername ? `@${post.discordUsername}` : post.userId) : "—"}</td>
+        <td>
+          <select style={{ width: 64 }} value={post.driverLevel || ""} onChange={e => patch({ driverLevel: e.target.value })}>
             <option value="">—</option>
             {driverLevels.map(l => <option key={l} value={l}>{l}</option>)}
           </select>
         </td>
-        <td style={{ padding: 6, minWidth: 180 }}>
+        <td style={{ minWidth: 170 }}>
           <CertPills catalog={certCatalog} selected={post.certifications || []} onToggle={toggleCert} />
         </td>
-        <td style={{ padding: 6 }} className="muted">{post.since || "—"}</td>
-        <td style={{ padding: 6 }}>
-          {canEditStructure && (
+        <td className="since-cell">{post.since || "—"}</td>
+        {canEditStructure && (
+          <td className="row-remove-cell">
             <button className="btn secondary" onClick={onRemove} title="Remove rank" style={{ padding: "4px 10px" }}>✕</button>
-          )}
-        </td>
+          </td>
+        )}
       </tr>
       {canEditStructure && (
         <tr>
-          <td colSpan={8} style={{ padding: "0 6px 8px" }}>
+          <td colSpan={8} style={{ padding: "0 10px 8px" }}>
             <a href="#" onClick={e => { e.preventDefault(); setShowRoles(s => !s); }} style={{ fontSize: 12 }}>
               {showRoles ? "Hide" : "Extra roles"} ({(post.roleIds || []).length})
             </a>
@@ -397,39 +397,41 @@ function GroupEditor({ section, group, roles, certCatalog, driverLevels, members
       </div>
 
       {(group.ranks || []).length > 0 && (
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
-          <thead>
-            <tr style={{ textAlign: "left", color: "#6b7180", fontSize: 12, textTransform: "uppercase" }}>
-              <th style={{ padding: "4px 6px" }}>Rank</th>
-              <th style={{ padding: "4px 6px" }}>Callsign</th>
-              <th style={{ padding: "4px 6px" }}>Name</th>
-              <th style={{ padding: "4px 6px" }}>Discord</th>
-              <th style={{ padding: "4px 6px" }}>Driver Level</th>
-              <th style={{ padding: "4px 6px" }}>Certifications</th>
-              <th style={{ padding: "4px 6px" }}>Since</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {(group.ranks || []).map(r => (
-              <RankRow
-                key={r.id}
-                post={r}
-                sectionId={section.id}
-                groupId={group.id}
-                roles={roles}
-                certCatalog={certCatalog}
-                driverLevels={driverLevels}
-                members={members}
-                canEditStructure={canEditStructure}
-                onChange={u => updateRank(r.id, u)}
-                onRemove={() => removeRank(r.id)}
-                onAssign={onAssign}
-                onPromote={onPromote}
-              />
-            ))}
-          </tbody>
-        </table>
+        <div className="roster-table-wrap">
+          <table className="roster-table">
+            <thead>
+              <tr>
+                <th>Rank</th>
+                <th>Callsign</th>
+                <th>Name</th>
+                <th>Discord</th>
+                <th>Driver Level</th>
+                <th>Certifications</th>
+                <th>Since</th>
+                {canEditStructure && <th></th>}
+              </tr>
+            </thead>
+            <tbody>
+              {(group.ranks || []).map(r => (
+                <RankRow
+                  key={r.id}
+                  post={r}
+                  sectionId={section.id}
+                  groupId={group.id}
+                  roles={roles}
+                  certCatalog={certCatalog}
+                  driverLevels={driverLevels}
+                  members={members}
+                  canEditStructure={canEditStructure}
+                  onChange={u => updateRank(r.id, u)}
+                  onRemove={() => removeRank(r.id)}
+                  onAssign={onAssign}
+                  onPromote={onPromote}
+                />
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
       {canEditStructure && <button className="btn secondary" onClick={addRank} style={{ marginTop: 8 }}>+ Add rank</button>}
     </div>
@@ -465,12 +467,12 @@ function SectionEditor({ section, roles, certCatalog, driverLevels, members, can
 
   return (
     <div id={`section-${section.id}`} className="card" style={{ marginBottom: 16, scrollMarginTop: 80 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 6 }}>
-        <span style={{ width: 10, height: 10, borderRadius: 2, background: section.color || "#5fb4ff", flexShrink: 0 }} />
+      <div className="roster-section-head" style={{ flexWrap: "wrap", marginBottom: 6 }}>
+        <span className="roster-section-mark" style={{ background: section.color || "#5fb4ff" }} />
         {editing ? (
           <input style={{ flex: "1 1 200px" }} value={section.name} onChange={e => patch({ name: e.target.value })} placeholder="Category name" />
         ) : (
-          <h3 style={{ margin: 0, flex: "1 1 200px" }}>{section.name || "Untitled category"}</h3>
+          <h3 className="roster-section-title" style={{ flex: "1 1 200px" }}>{section.name || "Untitled category"}</h3>
         )}
         {canEditStructure && (
           <>

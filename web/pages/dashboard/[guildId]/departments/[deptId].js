@@ -183,7 +183,7 @@ export default function DepartmentPage() {
   return (
     <>
       <AppHeader guildId={guildId} activeDeptSlug={deptId} homeHref={`/staff/${guildId}/${deptId}`} />
-      <div className="container">
+      <div className="container wide">
         <DeptBanner guildId={guildId} department={department} filled={filled} total={total} />
 
         <div className="action-pills">

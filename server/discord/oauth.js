@@ -11,9 +11,14 @@ const CLIENT_ID = process.env.DISCORD_CLIENT_ID;
 const CLIENT_SECRET = process.env.DISCORD_CLIENT_SECRET;
 const REDIRECT_URI = process.env.DISCORD_REDIRECT_URI;
 
-// Manage Roles + Manage Nicknames (role/nickname sync) + View Channels +
-// Send Messages (posting to an applications channel later).
-const BOT_PERMISSIONS = "268435488";
+const PERMISSION_BITS = {
+  VIEW_CHANNEL: 1n << 10n,
+  SEND_MESSAGES: 1n << 11n,
+  EMBED_LINKS: 1n << 14n,
+  MANAGE_NICKNAMES: 1n << 27n,
+  MANAGE_ROLES: 1n << 28n,
+};
+const BOT_PERMISSIONS = Object.values(PERMISSION_BITS).reduce((a, b) => a | b, 0n).toString();
 
 // mode "bot" (default) is the guild-owner flow described above — always
 // shows Discord's "Add to server" picker, which is right for actually

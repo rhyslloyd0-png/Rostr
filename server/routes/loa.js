@@ -64,4 +64,37 @@ router.get("/:guildId/:deptId/status", async (req, res) => {
   res.json({ requests: rows });
 });
 
+// Everyone else's leave in the department — lets staff see who's off without
+// exposing the full admin review queue (pending/denied requests some other
+// member never acted on aren't anyone else's business).
+router.get("/:guildId/:deptId/department", async (req, res) => {
+  const { guild, department } = await loadGuildAndDept(req.params.guildId, req.params.deptId);
+  if (!guild) return res.status(404).json({ error: "Server not found" });
+  if (!department) return res.status(404).json({ error: "Department not found or leave requests aren't enabled" });
+
+  const { rows } = await pool.query(
+    `SELECT * FROM loa_requests WHERE department_id = $1 AND user_id != $2 AND status IN ('approved', 'cancelled')
+     ORDER BY start_date DESC LIMIT 50`,
+    [department.id, req.user.id]
+  );
+  res.json({ requests: rows });
+});
+
+router.post("/:guildId/:deptId/:requestId/cancel", async (req, res) => {
+  const { guild, department } = await loadGuildAndDept(req.params.guildId, req.params.deptId);
+  if (!guild) return res.status(404).json({ error: "Server not found" });
+  if (!department) return res.status(404).json({ error: "Department not found or leave requests aren't enabled" });
+
+  const member = await getGuildMember(guild.id, req.user.id);
+  const displayName = member?.nick || req.user.username;
+
+  const { rows } = await pool.query(
+    `UPDATE loa_requests SET status = 'cancelled', cancelled_by = $1
+     WHERE id = $2 AND department_id = $3 AND user_id = $4 AND status != 'cancelled' RETURNING *`,
+    [displayName, req.params.requestId, department.id, req.user.id]
+  );
+  if (!rows.length) return res.status(404).json({ error: "Request not found" });
+  res.json({ request: rows[0] });
+});
+
 module.exports = router;

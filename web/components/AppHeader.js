@@ -32,10 +32,10 @@ export default function AppHeader({ guildId, activeDeptSlug, homeHref }) {
   return (
     <div className="app-header">
       <div className="app-header-inner">
-        <div className="app-header-brand">
+        <Link href={homeHref || "/"} className="app-header-brand">
           <img src="/brand/app-icon.png" alt="" width={26} height={26} style={{ borderRadius: 6 }} />
           ROSTR
-        </div>
+        </Link>
 
         <div className="app-header-depts">
           {(departments || []).map(d => (

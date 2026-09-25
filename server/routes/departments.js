@@ -297,8 +297,8 @@ router.patch("/:deptId/loa/:loaId", requireDepartmentManage, requireFeature("loa
 
 router.get("/:deptId/sop", requireDepartmentAdmin, requireFeature("sop"), async (req, res) => {
   const { rows } = await pool.query(
-    `SELECT id, filename, display_name, content_type, size, uploaded_by, uploaded_at
-     FROM sop_files WHERE department_id = $1 ORDER BY uploaded_at DESC`,
+    `SELECT id, filename, display_name, content_type, size, uploaded_by, uploaded_at, is_default
+     FROM sop_files WHERE department_id = $1 ORDER BY is_default DESC, uploaded_at DESC`,
     [req.department.id]
   );
   res.json({ files: rows });
@@ -310,9 +310,16 @@ router.post("/:deptId/sop", requireDepartmentAdmin, requireFeature("sop"), uploa
   const { rows } = await pool.query(
     `INSERT INTO sop_files (department_id, filename, display_name, content_type, size, data, uploaded_by)
      VALUES ($1, $2, $3, $4, $5, $6, $7)
-     RETURNING id, filename, display_name, content_type, size, uploaded_by, uploaded_at`,
+     RETURNING id, filename, display_name, content_type, size, uploaded_by, uploaded_at, is_default`,
     [req.department.id, req.file.originalname, req.body.displayName || null, req.file.mimetype, req.file.size, req.file.buffer, req.user.id]
   );
+  // First document in a department becomes the default automatically so the
+  // staff viewer always has something to show.
+  const { rows: countRows } = await pool.query("SELECT COUNT(*) FROM sop_files WHERE department_id = $1", [req.department.id]);
+  if (Number(countRows[0].count) === 1) {
+    await pool.query("UPDATE sop_files SET is_default = TRUE WHERE id = $1", [rows[0].id]);
+    rows[0].is_default = true;
+  }
   res.status(201).json({ file: rows[0] });
 });
 
@@ -320,19 +327,50 @@ router.patch("/:deptId/sop/:fileId", requireDepartmentAdmin, requireFeature("sop
   const { rows } = await pool.query(
     `UPDATE sop_files SET display_name = $1
      WHERE id = $2 AND department_id = $3
-     RETURNING id, filename, display_name, content_type, size, uploaded_by, uploaded_at`,
+     RETURNING id, filename, display_name, content_type, size, uploaded_by, uploaded_at, is_default`,
     [req.body.displayName || null, req.params.fileId, req.department.id]
   );
   if (!rows.length) return res.status(404).json({ error: "File not found" });
   res.json({ file: rows[0] });
 });
 
+router.post("/:deptId/sop/:fileId/default", requireDepartmentAdmin, requireFeature("sop"), async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    await client.query("UPDATE sop_files SET is_default = FALSE WHERE department_id = $1", [req.department.id]);
+    const { rows } = await client.query(
+      `UPDATE sop_files SET is_default = TRUE WHERE id = $1 AND department_id = $2
+       RETURNING id, filename, display_name, content_type, size, uploaded_by, uploaded_at, is_default`,
+      [req.params.fileId, req.department.id]
+    );
+    if (!rows.length) { await client.query("ROLLBACK"); return res.status(404).json({ error: "File not found" }); }
+    await client.query("COMMIT");
+    res.json({ file: rows[0] });
+  } catch (err) {
+    await client.query("ROLLBACK");
+    throw err;
+  } finally {
+    client.release();
+  }
+});
+
 router.delete("/:deptId/sop/:fileId", requireDepartmentAdmin, requireFeature("sop"), async (req, res) => {
-  const { rowCount } = await pool.query(
-    "DELETE FROM sop_files WHERE id = $1 AND department_id = $2",
+  const { rows } = await pool.query(
+    "DELETE FROM sop_files WHERE id = $1 AND department_id = $2 RETURNING is_default",
     [req.params.fileId, req.department.id]
   );
-  if (!rowCount) return res.status(404).json({ error: "File not found" });
+  if (!rows.length) return res.status(404).json({ error: "File not found" });
+  // Deleting the default doc leaves the viewer empty otherwise — hand the
+  // default to whatever's newest among what's left.
+  if (rows[0].is_default) {
+    await pool.query(
+      `UPDATE sop_files SET is_default = TRUE WHERE id = (
+         SELECT id FROM sop_files WHERE department_id = $1 ORDER BY uploaded_at DESC LIMIT 1
+       )`,
+      [req.department.id]
+    );
+  }
   res.status(204).end();
 });
 

@@ -19,6 +19,7 @@ export default function SopLibrary() {
 
   const [department, setDepartment] = useState(null);
   const [files, setFiles] = useState(null);
+  const [selectedId, setSelectedId] = useState(null);
   const [needsLogin, setNeedsLogin] = useState(false);
   const [error, setError] = useState(null);
 
@@ -28,6 +29,8 @@ export default function SopLibrary() {
       .then(data => {
         setDepartment(data.department);
         setFiles(data.files);
+        const preferred = data.files.find(f => f.is_default) || data.files[0];
+        setSelectedId(preferred ? preferred.id : null);
       })
       .catch(err => {
         if (err.status === 401) setNeedsLogin(true);
@@ -52,23 +55,69 @@ export default function SopLibrary() {
   if (error) return <><AppHeader guildId={guildId} activeDeptSlug={deptId} /><div className="container"><div className="card error">{error.body?.message || error.message}</div></div></>;
   if (!department || !files) return <><AppHeader guildId={guildId} activeDeptSlug={deptId} /><div className="container"><p className="muted">Loading...</p></div></>;
 
+  const selected = files.find(f => f.id === selectedId) || null;
+  const canView = selected && selected.content_type === "text/html";
+
   return (
     <>
     <AppHeader guildId={guildId} activeDeptSlug={deptId} />
-    <div className="container">
+    <div className="container wide sop-library">
       <h1>{department.name} — SOP documents</h1>
-      {files.length === 0 && <p className="muted">No documents have been uploaded yet.</p>}
-      {files.map(f => (
-        <div key={f.id} className="card" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <div>
-            <div>{f.display_name || f.filename}</div>
-            <div className="muted">{formatSize(f.size)} — uploaded {new Date(f.uploaded_at).toLocaleDateString()}</div>
+
+      {files.length === 0 ? (
+        <p className="muted">No documents have been uploaded yet.</p>
+      ) : (
+        <div className="sop-layout">
+          <div className="sop-sidebar">
+            {files.map(f => (
+              <div
+                key={f.id}
+                className={`card sop-doc-card${f.id === selectedId ? " sop-doc-card-active" : ""}`}
+                onClick={() => setSelectedId(f.id)}
+              >
+                <div className="sop-doc-name">
+                  {f.display_name || f.filename}
+                  {f.is_default && <span className="pill pill-green">Default</span>}
+                </div>
+                <div className="muted" style={{ fontSize: 12 }}>
+                  {formatSize(f.size)} — uploaded {new Date(f.uploaded_at).toLocaleDateString()}
+                </div>
+              </div>
+            ))}
           </div>
-          <a className="btn" href={`${API_BASE_URL}/sop/${guildId}/${deptId}/${f.id}/download`} target="_blank" rel="noreferrer">
-            Download
-          </a>
+
+          <div className="sop-viewer card">
+            {selected && (
+              <>
+                <div className="sop-viewer-header">
+                  <strong>{selected.display_name || selected.filename}</strong>
+                  <a
+                    className="btn secondary"
+                    href={`${API_BASE_URL}/sop/${guildId}/${deptId}/${selected.id}/download`}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Download
+                  </a>
+                </div>
+                {canView ? (
+                  <iframe
+                    key={selected.id}
+                    src={`${API_BASE_URL}/sop/${guildId}/${deptId}/${selected.id}/view`}
+                    className="sop-viewer-frame"
+                    sandbox="allow-scripts allow-popups"
+                    title={selected.display_name || selected.filename}
+                  />
+                ) : (
+                  <p className="muted" style={{ padding: 20 }}>
+                    This file type can't be previewed — use Download to open it.
+                  </p>
+                )}
+              </>
+            )}
+          </div>
         </div>
-      ))}
+      )}
     </div>
     </>
   );

@@ -59,9 +59,22 @@ export default function SopPanel({ guildId, deptId }) {
     load();
   }
 
+  async function rename(f) {
+    const name = window.prompt("Document name", f.display_name || f.filename);
+    if (name === null) return;
+    await apiFetchRaw(`/guilds/${guildId}/departments/${deptId}/sop/${f.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ displayName: name }) });
+    load();
+  }
+
+  async function makeDefault(id) {
+    await apiFetchRaw(`/guilds/${guildId}/departments/${deptId}/sop/${id}/default`, { method: "POST" });
+    load();
+  }
+
   return (
     <div>
       <h2>SOP documents</h2>
+      <p className="muted">The starred document is what staff see first in the SOP library.</p>
       {error && <div className="card error">{error.message}</div>}
 
       <form className="card" onSubmit={upload} style={{ display: "flex", gap: 10, alignItems: "center" }}>
@@ -74,10 +87,22 @@ export default function SopPanel({ guildId, deptId }) {
       {files && files.map(f => (
         <div key={f.id} className="card" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div>
-            <div>{f.display_name || f.filename}</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              {f.display_name || f.filename}
+              {f.is_default && <span className="pill pill-green">Default</span>}
+            </div>
             <div className="muted">{formatSize(f.size)} — uploaded {new Date(f.uploaded_at).toLocaleDateString()}</div>
           </div>
           <div style={{ display: "flex", gap: 8 }}>
+            <button
+              className="btn secondary icon-btn"
+              title={f.is_default ? "Default document" : "Make default"}
+              onClick={() => !f.is_default && makeDefault(f.id)}
+              style={f.is_default ? { color: "#ffb547", borderColor: "#ffb547" } : undefined}
+            >
+              ★
+            </button>
+            <button className="btn secondary" onClick={() => rename(f)}>Rename</button>
             <a className="btn secondary" href={`${API_BASE_URL}/guilds/${guildId}/departments/${deptId}/sop/${f.id}/download`} target="_blank" rel="noreferrer">
               Download
             </a>

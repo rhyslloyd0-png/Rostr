@@ -482,3 +482,16 @@ label { display: block; font-size: 13px; margin-bottom: 6px; color: #a5abba; }
   font-weight: 700;
   font-size: 16px;
 }
+
+.template-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+.template-card {
+  text-align: left;
+  background: #0f1115;
+  border: 1px solid #333947;
+  border-radius: 10px;
+  padding: 12px 14px;
+  cursor: pointer;
+  color: #e8e9ec;
+}
+.template-card:hover { border-color: #5fb4ff; }
+.template-card-active { border-color: var(--brand-blue); box-shadow: 0 0 0 1px var(--brand-blue); background: rgba(47,143,255,0.08); }

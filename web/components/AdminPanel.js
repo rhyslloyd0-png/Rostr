@@ -3,6 +3,7 @@ import { apiFetch } from "../lib/api";
 import RolePicker from "./RolePicker";
 import ApplicationsPanel, { QuestionEditor } from "./ApplicationsPanel";
 import SopPanel from "./SopPanel";
+import { exportRosterPdf } from "../lib/exportRosterPdf";
 
 async function apiFetchRaw(path, options = {}) {
   const resp = await fetch(`/api${path}`, { ...options, credentials: "include" });
@@ -27,6 +28,7 @@ const TOOLS = [
   { key: "placement", icon: "✅", label: "Approval placement" },
   { key: "announce", icon: "📨", label: "Send message" },
   { key: "sop", icon: "📄", label: "SOP documents" },
+  { key: "export", icon: "⬇", label: "Export roster (PDF)", direct: true },
 ];
 
 function Modal({ title, onClose, children }) {
@@ -415,7 +417,12 @@ export default function AdminPanel({
     <div>
       <div className="admin-toolbar">
         {TOOLS.map(t => (
-          <button key={t.key} className="btn-icon" title={t.label} onClick={() => setOpenTool(t.key)}>
+          <button
+            key={t.key}
+            className="btn-icon"
+            title={t.label}
+            onClick={() => (t.direct ? exportRosterPdf(department.name, sections) : setOpenTool(t.key))}
+          >
             <span aria-hidden="true">{t.icon}</span>
           </button>
         ))}

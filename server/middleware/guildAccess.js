@@ -7,7 +7,7 @@ const { getGuildMember } = require("../discord/api");
 
 async function requireGuildAccess(req, res, next) {
   const { guildId } = req.params;
-  const { rows } = await pool.query("SELECT * FROM guilds WHERE id = $1", [guildId]);
+  const { rows } = await pool.query("SELECT * FROM guilds WHERE id = $1 OR slug = $1", [guildId]);
   if (!rows.length) return res.status(404).json({ error: "Guild not found" });
   const guild = rows[0];
 
@@ -19,11 +19,11 @@ async function requireGuildAccess(req, res, next) {
 
   const { rows: adminRoles } = await pool.query(
     "SELECT discord_role_id FROM guild_admins WHERE guild_id = $1",
-    [guildId]
+    [guild.id]
   );
   if (!adminRoles.length) return res.status(403).json({ error: "Not authorized for this guild" });
 
-  const member = await getGuildMember(guildId, req.user.id);
+  const member = await getGuildMember(guild.id, req.user.id);
   const memberRoleIds = new Set(member?.roles || []);
   const isAdmin = adminRoles.some(r => memberRoleIds.has(r.discord_role_id));
   if (!isAdmin) return res.status(403).json({ error: "Not authorized for this guild" });

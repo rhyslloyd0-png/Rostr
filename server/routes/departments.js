@@ -3,11 +3,13 @@ const multer = require("multer");
 const pool = require("../db/pool");
 const { attachSession, requireAuth } = require("../middleware/session");
 const { requireGuildAccess } = require("../middleware/guildAccess");
+const { requireDepartmentMember, requireDepartmentManage, requireDepartmentAdmin, computeTier } = require("../middleware/departmentAccess");
 const { canCreateDepartment, requireFeature } = require("../config/plans");
-const { addMemberRole, removeMemberRole } = require("../discord/api");
+const { addMemberRole, removeMemberRole, getAllGuildMembers } = require("../discord/api");
+const { uniqueDepartmentSlug } = require("../db/slug");
 
 const router = express.Router({ mergeParams: true });
-router.use(attachSession, requireAuth, requireGuildAccess);
+router.use(attachSession, requireAuth);
 
 // SOP documents are read into memory then written to Postgres as bytea —
 // fine at the size SOPs actually are (policy PDFs/docs, not video), and
@@ -22,7 +24,11 @@ function sanitizeFilename(name) {
   return String(name).replace(/[\x00-\x1f"]/g, "_");
 }
 
-router.get("/", async (req, res) => {
+// ---- Guild-wide (creating/listing/removing departments): guild owner or a
+// guild-admin role only, not a department's own admin/manager role — see
+// middleware/departmentAccess.js for the per-department tiers below.
+
+router.get("/", requireGuildAccess, async (req, res) => {
   const { rows } = await pool.query(
     "SELECT * FROM departments WHERE guild_id = $1 ORDER BY position, created_at",
     [req.guild.id]
@@ -30,7 +36,7 @@ router.get("/", async (req, res) => {
   res.json({ departments: rows });
 });
 
-router.post("/", async (req, res) => {
+router.post("/", requireGuildAccess, async (req, res) => {
   const allowed = await canCreateDepartment(req.guild);
   if (!allowed) {
     return res.status(402).json({ error: "plan_limit_reached", message: "Upgrade your plan to add another department" });
@@ -39,21 +45,30 @@ router.post("/", async (req, res) => {
   const { name, accessRoleId, staffRoleId } = req.body;
   if (!name) return res.status(400).json({ error: "name is required" });
 
+  const slug = await uniqueDepartmentSlug(pool, req.guild.id, name);
   const { rows } = await pool.query(
-    `INSERT INTO departments (guild_id, name, access_role_id, staff_role_id)
-     VALUES ($1, $2, $3, $4) RETURNING *`,
-    [req.guild.id, name, accessRoleId || null, staffRoleId || null]
+    `INSERT INTO departments (guild_id, name, slug, access_role_id, staff_role_id)
+     VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+    [req.guild.id, name, slug, accessRoleId || null, staffRoleId || null]
   );
   res.status(201).json({ department: rows[0] });
 });
 
-router.get("/:deptId", async (req, res) => {
-  const { rows } = await pool.query(
-    "SELECT * FROM departments WHERE id = $1 AND guild_id = $2",
+router.delete("/:deptId", requireGuildAccess, async (req, res) => {
+  const { rowCount } = await pool.query(
+    "DELETE FROM departments WHERE (id::text = $1 OR slug = $1) AND guild_id = $2",
     [req.params.deptId, req.guild.id]
   );
-  if (!rows.length) return res.status(404).json({ error: "Department not found" });
-  res.json({ department: rows[0] });
+  if (!rowCount) return res.status(404).json({ error: "Department not found" });
+  res.status(204).end();
+});
+
+// ---- Per-department (see middleware/departmentAccess.js for the three
+// tiers: member = view, manage = operate, admin = structural) ----
+
+router.get("/:deptId", requireDepartmentMember, async (req, res) => {
+  const tier = await computeTier(req);
+  res.json({ department: req.department, tier });
 });
 
 const EDITABLE_FIELDS = [
@@ -61,7 +76,7 @@ const EDITABLE_FIELDS = [
   "staff_role_id", "applicant_role_id", "loa_role_id", "applications_channel_id", "position",
 ];
 
-router.patch("/:deptId", async (req, res) => {
+router.patch("/:deptId", requireDepartmentAdmin, async (req, res) => {
   const updates = Object.keys(req.body).filter(k => EDITABLE_FIELDS.includes(k));
   if (!updates.length) return res.status(400).json({ error: "No editable fields provided" });
 
@@ -71,120 +86,122 @@ router.patch("/:deptId", async (req, res) => {
     `UPDATE departments SET ${setClause} WHERE id = $1 AND guild_id = $2 RETURNING *`,
     [req.params.deptId, req.guild.id, ...values]
   );
-  if (!rows.length) return res.status(404).json({ error: "Department not found" });
   res.json({ department: rows[0] });
 });
 
-router.delete("/:deptId", async (req, res) => {
-  const { rowCount } = await pool.query(
-    "DELETE FROM departments WHERE id = $1 AND guild_id = $2",
-    [req.params.deptId, req.guild.id]
-  );
-  if (!rowCount) return res.status(404).json({ error: "Department not found" });
-  res.status(204).end();
-});
-
 // Roster/questions/role-map JSON blobs — GET returns {} if unset yet.
-router.get("/:deptId/data/:key", async (req, res) => {
+// Viewing is member-level for all keys; writing the roster is manage-level
+// (day-to-day operations) but writing anything else (questions, role map)
+// is structural, admin-level only.
+router.get("/:deptId/data/:key", requireDepartmentMember, async (req, res) => {
   const { rows } = await pool.query(
-    `SELECT dd.value FROM department_data dd
-     JOIN departments d ON d.id = dd.department_id
-     WHERE dd.department_id = $1 AND d.guild_id = $2 AND dd.data_key = $3`,
-    [req.params.deptId, req.guild.id, req.params.key]
+    "SELECT value FROM department_data WHERE department_id = $1 AND data_key = $2",
+    [req.department.id, req.params.key]
   );
   res.json({ value: rows.length ? rows[0].value : {} });
 });
 
-router.put("/:deptId/data/:key", async (req, res) => {
-  const { rows: deptRows } = await pool.query(
-    "SELECT id FROM departments WHERE id = $1 AND guild_id = $2",
-    [req.params.deptId, req.guild.id]
-  );
-  if (!deptRows.length) return res.status(404).json({ error: "Department not found" });
+async function requireDataWriteAccess(req, res, next) {
+  const guard = req.params.key === "roster" ? requireDepartmentManage : requireDepartmentAdmin;
+  return guard(req, res, next);
+}
 
+router.put("/:deptId/data/:key", requireDataWriteAccess, async (req, res) => {
   await pool.query(
     `INSERT INTO department_data (department_id, data_key, value)
      VALUES ($1, $2, $3)
      ON CONFLICT (department_id, data_key) DO UPDATE SET value = EXCLUDED.value`,
-    [req.params.deptId, req.params.key, JSON.stringify(req.body.value ?? {})]
+    [req.department.id, req.params.key, JSON.stringify(req.body.value ?? {})]
   );
   res.json({ ok: true });
 });
 
-// Applies this department's staff role to every roster slot's assigned
-// member — one-way (grant only, no removal yet) since detecting who *lost*
-// a roster slot would mean diffing against Discord's full member/role list,
-// not just the roster JSON; safe to run repeatedly (PUT-style role add is
-// idempotent).
-router.post("/:deptId/roster/sync", async (req, res) => {
-  const { rows } = await pool.query(
-    "SELECT * FROM departments WHERE id = $1 AND guild_id = $2",
-    [req.params.deptId, req.guild.id]
-  );
-  if (!rows.length) return res.status(404).json({ error: "Department not found" });
-  const department = rows[0];
-  if (!department.staff_role_id) {
-    return res.status(400).json({ error: "This department has no staff role configured yet" });
-  }
-
+// Two-way sync: for every role this department's roster controls (its
+// staff_role_id, plus whatever roleIds are set on individual ranks), works
+// out who *should* hold it from the roster JSON, compares that against who
+// *currently* holds it in Discord (getAllGuildMembers — there's no "list
+// members with this role" endpoint, so a full member list is the only way
+// to find people who need a role taken away), and grants/revokes only the
+// difference. This is what makes removing someone from the roster actually
+// remove their roles instead of just leaving them assigned forever.
+router.post("/:deptId/roster/sync", requireDepartmentManage, async (req, res) => {
   const { rows: dataRows } = await pool.query(
     "SELECT value FROM department_data WHERE department_id = $1 AND data_key = 'roster'",
-    [department.id]
+    [req.department.id]
   );
-  const slots = dataRows.length ? (dataRows[0].value.slots || []) : [];
-  const assignedUserIds = [...new Set(slots.filter(s => s.userId).map(s => s.userId))];
+  const sections = dataRows.length ? (dataRows[0].value.sections || []) : [];
+  const allRanks = sections.flatMap(s => s.ranks || []);
+
+  // roleId -> Set of userIds who should hold it
+  const desired = new Map();
+  function want(roleId, userId) {
+    if (!roleId || !userId) return;
+    if (!desired.has(roleId)) desired.set(roleId, new Set());
+    desired.get(roleId).add(userId);
+  }
+  for (const rank of allRanks) {
+    if (!rank.userId) continue;
+    want(req.department.staff_role_id, rank.userId);
+    for (const roleId of rank.roleIds || []) want(roleId, rank.userId);
+  }
+
+  if (desired.size === 0) {
+    return res.status(400).json({ error: "This department has no staff role or rank roles configured yet" });
+  }
+
+  const members = await getAllGuildMembers(req.guild.id);
+  const changes = [];
+  for (const [roleId, desiredUserIds] of desired) {
+    const currentHolders = new Set(members.filter(m => m.roles?.includes(roleId)).map(m => m.user.id));
+    for (const userId of desiredUserIds) {
+      if (!currentHolders.has(userId)) changes.push({ userId, roleId, action: "add" });
+    }
+    for (const userId of currentHolders) {
+      if (!desiredUserIds.has(userId)) changes.push({ userId, roleId, action: "remove" });
+    }
+  }
 
   const results = await Promise.all(
-    assignedUserIds.map(async userId => ({
-      userId,
-      ok: await addMemberRole(req.guild.id, userId, department.staff_role_id),
+    changes.map(async c => ({
+      ...c,
+      ok: c.action === "add"
+        ? await addMemberRole(req.guild.id, c.userId, c.roleId)
+        : await removeMemberRole(req.guild.id, c.userId, c.roleId),
     }))
   );
 
   res.json({
-    synced: results.filter(r => r.ok).length,
-    failed: results.filter(r => !r.ok).map(r => r.userId),
+    added: results.filter(r => r.ok && r.action === "add").length,
+    removed: results.filter(r => r.ok && r.action === "remove").length,
+    failed: results.filter(r => !r.ok).map(r => ({ userId: r.userId, roleId: r.roleId, action: r.action })),
   });
 });
 
-// ---- Applications (admin side: review queue) ----
+// ---- Applications (manage-tier: admin or manager review queue) ----
 // The applicant-facing submit/status endpoints live in routes/apply.js,
-// reachable by any logged-in Discord user, not just guild admins.
+// reachable by any logged-in Discord user, not just department staff.
 
-router.get("/:deptId/applications", requireFeature("applications"), async (req, res) => {
-  const { rows: deptRows } = await pool.query(
-    "SELECT id FROM departments WHERE id = $1 AND guild_id = $2",
-    [req.params.deptId, req.guild.id]
-  );
-  if (!deptRows.length) return res.status(404).json({ error: "Department not found" });
-
+router.get("/:deptId/applications", requireDepartmentManage, requireFeature("applications"), async (req, res) => {
   const status = req.query.status;
   const { rows } = await pool.query(
     status
       ? "SELECT * FROM applications WHERE department_id = $1 AND status = $2 ORDER BY submitted_at DESC"
       : "SELECT * FROM applications WHERE department_id = $1 ORDER BY submitted_at DESC",
-    status ? [req.params.deptId, status] : [req.params.deptId]
+    status ? [req.department.id, status] : [req.department.id]
   );
   res.json({ applications: rows });
 });
 
-router.patch("/:deptId/applications/:appId", requireFeature("applications"), async (req, res) => {
+router.patch("/:deptId/applications/:appId", requireDepartmentManage, requireFeature("applications"), async (req, res) => {
   const { status, feedback } = req.body;
   if (!["approved", "denied", "pending"].includes(status)) {
     return res.status(400).json({ error: "status must be approved, denied, or pending" });
   }
 
-  const { rows: deptRows } = await pool.query(
-    "SELECT * FROM departments WHERE id = $1 AND guild_id = $2",
-    [req.params.deptId, req.guild.id]
-  );
-  if (!deptRows.length) return res.status(404).json({ error: "Department not found" });
-  const department = deptRows[0];
-
   const { rows } = await pool.query(
     `UPDATE applications SET status = $1, feedback = $2
      WHERE id = $3 AND department_id = $4 RETURNING *`,
-    [status, feedback || null, req.params.appId, req.params.deptId]
+    [status, feedback || null, req.params.appId, req.department.id]
   );
   if (!rows.length) return res.status(404).json({ error: "Application not found" });
   const application = rows[0];
@@ -192,120 +209,97 @@ router.patch("/:deptId/applications/:appId", requireFeature("applications"), asy
   // Best-effort role swap — a failed Discord call (member left, missing
   // permission) shouldn't roll back the decision itself, just the role move.
   if (status === "approved") {
-    if (department.staff_role_id) await addMemberRole(req.guild.id, application.user_id, department.staff_role_id);
-    if (department.applicant_role_id) await removeMemberRole(req.guild.id, application.user_id, department.applicant_role_id);
-  } else if (status === "denied" && department.applicant_role_id) {
-    await removeMemberRole(req.guild.id, application.user_id, department.applicant_role_id);
+    if (req.department.staff_role_id) await addMemberRole(req.guild.id, application.user_id, req.department.staff_role_id);
+    if (req.department.applicant_role_id) await removeMemberRole(req.guild.id, application.user_id, req.department.applicant_role_id);
+  } else if (status === "denied" && req.department.applicant_role_id) {
+    await removeMemberRole(req.guild.id, application.user_id, req.department.applicant_role_id);
   }
 
   res.json({ application });
 });
 
-// ---- Leave of absence (admin side: review queue) ----
+// ---- Leave of absence (manage-tier: admin or manager review queue) ----
 // Self-service submit/status for staff lives in routes/loa.js. Activating/
 // deactivating the LOA Discord role once a request is approved happens on
 // its own schedule (see jobs/loaScheduler.js) rather than here, since a
 // request's window can open or close with nobody touching the site.
 
-router.get("/:deptId/loa", requireFeature("loa"), async (req, res) => {
-  const { rows: deptRows } = await pool.query(
-    "SELECT id FROM departments WHERE id = $1 AND guild_id = $2",
-    [req.params.deptId, req.guild.id]
-  );
-  if (!deptRows.length) return res.status(404).json({ error: "Department not found" });
-
+router.get("/:deptId/loa", requireDepartmentManage, requireFeature("loa"), async (req, res) => {
   const status = req.query.status;
   const { rows } = await pool.query(
     status
       ? "SELECT * FROM loa_requests WHERE department_id = $1 AND status = $2 ORDER BY start_date DESC"
       : "SELECT * FROM loa_requests WHERE department_id = $1 ORDER BY start_date DESC",
-    status ? [req.params.deptId, status] : [req.params.deptId]
+    status ? [req.department.id, status] : [req.department.id]
   );
   res.json({ requests: rows });
 });
 
-router.patch("/:deptId/loa/:loaId", requireFeature("loa"), async (req, res) => {
+router.patch("/:deptId/loa/:loaId", requireDepartmentManage, requireFeature("loa"), async (req, res) => {
   const { status } = req.body;
   if (!["approved", "denied"].includes(status)) {
     return res.status(400).json({ error: "status must be approved or denied" });
   }
 
-  const { rows: deptRows } = await pool.query(
-    "SELECT id FROM departments WHERE id = $1 AND guild_id = $2",
-    [req.params.deptId, req.guild.id]
-  );
-  if (!deptRows.length) return res.status(404).json({ error: "Department not found" });
-
   const { rows } = await pool.query(
     `UPDATE loa_requests SET status = $1, decided_by = $2
      WHERE id = $3 AND department_id = $4 RETURNING *`,
-    [status, req.user.id, req.params.loaId, req.params.deptId]
+    [status, req.user.id, req.params.loaId, req.department.id]
   );
   if (!rows.length) return res.status(404).json({ error: "Leave request not found" });
   res.json({ request: rows[0] });
 });
 
-// ---- SOP documents (admin side: upload/manage) ----
+// ---- SOP documents (admin-tier: structural, since it's managing what the
+// department publishes) ----
 // Staff-facing list/download lives in routes/sop.js, reachable by anyone
-// holding the department's access/staff/admin/manager role, not just guild
-// admins.
+// holding the department's access/staff/admin/manager role.
 
-router.get("/:deptId/sop", requireFeature("sop"), async (req, res) => {
-  const { rows: deptRows } = await pool.query(
-    "SELECT id FROM departments WHERE id = $1 AND guild_id = $2",
-    [req.params.deptId, req.guild.id]
-  );
-  if (!deptRows.length) return res.status(404).json({ error: "Department not found" });
-
+router.get("/:deptId/sop", requireDepartmentAdmin, requireFeature("sop"), async (req, res) => {
   const { rows } = await pool.query(
     `SELECT id, filename, display_name, content_type, size, uploaded_by, uploaded_at
      FROM sop_files WHERE department_id = $1 ORDER BY uploaded_at DESC`,
-    [req.params.deptId]
+    [req.department.id]
   );
   res.json({ files: rows });
 });
 
-router.post("/:deptId/sop", requireFeature("sop"), upload.single("file"), async (req, res) => {
-  const { rows: deptRows } = await pool.query(
-    "SELECT id FROM departments WHERE id = $1 AND guild_id = $2",
-    [req.params.deptId, req.guild.id]
-  );
-  if (!deptRows.length) return res.status(404).json({ error: "Department not found" });
+router.post("/:deptId/sop", requireDepartmentAdmin, requireFeature("sop"), upload.single("file"), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: "file is required" });
 
   const { rows } = await pool.query(
     `INSERT INTO sop_files (department_id, filename, display_name, content_type, size, data, uploaded_by)
      VALUES ($1, $2, $3, $4, $5, $6, $7)
      RETURNING id, filename, display_name, content_type, size, uploaded_by, uploaded_at`,
-    [req.params.deptId, req.file.originalname, req.body.displayName || null, req.file.mimetype, req.file.size, req.file.buffer, req.user.id]
+    [req.department.id, req.file.originalname, req.body.displayName || null, req.file.mimetype, req.file.size, req.file.buffer, req.user.id]
   );
   res.status(201).json({ file: rows[0] });
 });
 
-router.patch("/:deptId/sop/:fileId", requireFeature("sop"), async (req, res) => {
+router.patch("/:deptId/sop/:fileId", requireDepartmentAdmin, requireFeature("sop"), async (req, res) => {
   const { rows } = await pool.query(
     `UPDATE sop_files SET display_name = $1
      WHERE id = $2 AND department_id = $3
      RETURNING id, filename, display_name, content_type, size, uploaded_by, uploaded_at`,
-    [req.body.displayName || null, req.params.fileId, req.params.deptId]
+    [req.body.displayName || null, req.params.fileId, req.department.id]
   );
   if (!rows.length) return res.status(404).json({ error: "File not found" });
   res.json({ file: rows[0] });
 });
 
-router.delete("/:deptId/sop/:fileId", requireFeature("sop"), async (req, res) => {
+router.delete("/:deptId/sop/:fileId", requireDepartmentAdmin, requireFeature("sop"), async (req, res) => {
   const { rowCount } = await pool.query(
     "DELETE FROM sop_files WHERE id = $1 AND department_id = $2",
-    [req.params.fileId, req.params.deptId]
+    [req.params.fileId, req.department.id]
   );
   if (!rowCount) return res.status(404).json({ error: "File not found" });
   res.status(204).end();
 });
 
-router.get("/:deptId/sop/:fileId/download", requireFeature("sop"), async (req, res) => {
+router.get("/:deptId/sop/:fileId/download", requireDepartmentAdmin, requireFeature("sop"), async (req, res) => {
   const { rows } = await pool.query(
     "SELECT * FROM sop_files WHERE id = $1 AND department_id = $2",
-    [req.params.fileId, req.params.deptId]
+    [req.params.fileId, req.department.id]
   );
   if (!rows.length) return res.status(404).json({ error: "File not found" });
   const file = rows[0];

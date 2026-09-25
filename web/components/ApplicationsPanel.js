@@ -99,7 +99,7 @@ function ApplicationRow({ app, onDecide }) {
   );
 }
 
-export default function ApplicationsPanel({ guildId, deptId }) {
+export default function ApplicationsPanel({ guildId, deptId, showQuestionEditor = true }) {
   const [applications, setApplications] = useState(null);
   const [error, setError] = useState(null);
 
@@ -122,7 +122,7 @@ export default function ApplicationsPanel({ guildId, deptId }) {
   return (
     <div>
       <h2>Applications</h2>
-      <QuestionEditor guildId={guildId} deptId={deptId} />
+      {showQuestionEditor && <QuestionEditor guildId={guildId} deptId={deptId} />}
 
       {error && <div className="card error">{error.body?.message || error.message}</div>}
       {!applications && !error && <p className="muted">Loading applications...</p>}

@@ -6,15 +6,16 @@ const express = require("express");
 const pool = require("../db/pool");
 const { attachSession, requireAuth } = require("../middleware/session");
 const { requireDepartmentMember } = require("../middleware/departmentAccess");
+const { requireFeature } = require("../config/plans");
 
 const router = express.Router();
-router.use(attachSession, requireAuth);
+router.use(attachSession, requireAuth, requireDepartmentMember, requireFeature("sop"));
 
 function sanitizeFilename(name) {
   return String(name).replace(/[\x00-\x1f"]/g, "_");
 }
 
-router.get("/:guildId/:deptId", requireDepartmentMember, async (req, res) => {
+router.get("/:guildId/:deptId", async (req, res) => {
   const { rows } = await pool.query(
     `SELECT id, filename, display_name, content_type, size, uploaded_at
      FROM sop_files WHERE department_id = $1 ORDER BY uploaded_at DESC`,
@@ -23,7 +24,7 @@ router.get("/:guildId/:deptId", requireDepartmentMember, async (req, res) => {
   res.json({ department: { id: req.department.id, name: req.department.name }, files: rows });
 });
 
-router.get("/:guildId/:deptId/:fileId/download", requireDepartmentMember, async (req, res) => {
+router.get("/:guildId/:deptId/:fileId/download", async (req, res) => {
   const { rows } = await pool.query(
     "SELECT * FROM sop_files WHERE id = $1 AND department_id = $2",
     [req.params.fileId, req.department.id]

@@ -1,50 +1,98 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/router";
 import { apiFetch } from "../../../../lib/api";
+import RosterTable from "../../../../components/RosterTable";
+import RosterEditor from "../../../../components/RosterEditor";
+import RolePicker from "../../../../components/RolePicker";
 import ApplicationsPanel from "../../../../components/ApplicationsPanel";
 import LoaPanel from "../../../../components/LoaPanel";
 import SopPanel from "../../../../components/SopPanel";
 
-let slotIdCounter = 0;
-function newSlot() {
-  slotIdCounter += 1;
-  return { id: `new-${Date.now()}-${slotIdCounter}`, title: "", userId: "", displayName: "" };
+// Migrates the old flat `{ slots: [...] }` roster shape (title/userId/
+// displayName) into one default "Staff" section under the current
+// `{ sections: [{ ranks: [...] }] }` shape, so roster data saved before this
+// redesign doesn't just disappear.
+function normalizeRoster(value) {
+  if (value.sections) return value.sections;
+  if (value.slots?.length) {
+    return [{
+      id: "migrated-staff",
+      name: "Staff",
+      ranks: value.slots.map(s => ({
+        id: s.id,
+        rank: s.title || "",
+        userId: s.userId || "",
+        discordUsername: "",
+        name: s.displayName || "",
+        certifications: [],
+        roleIds: [],
+      })),
+    }];
+  }
+  return [];
 }
 
-function MemberPicker({ guildId, onPick }) {
-  const [query, setQuery] = useState("");
-  const [results, setResults] = useState([]);
+function AdminSettings({ guildId, deptId, department, roles, onSaved }) {
+  const [form, setForm] = useState({
+    name: department.name,
+    access_role_id: department.access_role_id || "",
+    staff_role_id: department.staff_role_id || "",
+    applicant_role_id: department.applicant_role_id || "",
+    loa_role_id: department.loa_role_id || "",
+    admin_role_ids: department.admin_role_ids || [],
+    manager_role_ids: department.manager_role_ids || [],
+  });
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
 
-  useEffect(() => {
-    if (!query.trim()) { setResults([]); return; }
-    const timer = setTimeout(() => {
-      apiFetch(`/guilds/${guildId}/members/search?q=${encodeURIComponent(query)}`)
-        .then(data => setResults(data.members))
-        .catch(() => setResults([]));
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [query, guildId]);
+  function set(field, value) {
+    setForm(prev => ({ ...prev, [field]: value }));
+    setSaved(false);
+  }
+
+  async function save() {
+    setSaving(true);
+    try {
+      await apiFetch(`/guilds/${guildId}/departments/${deptId}`, { method: "PATCH", body: form });
+      setSaved(true);
+      onSaved();
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const roleSelect = (label, field) => (
+    <div className="field">
+      <label>{label}</label>
+      <select value={form[field]} onChange={e => set(field, e.target.value)}>
+        <option value="">— none —</option>
+        {roles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+      </select>
+    </div>
+  );
 
   return (
-    <div style={{ position: "relative" }}>
-      <input
-        placeholder="Search Discord members..."
-        value={query}
-        onChange={e => setQuery(e.target.value)}
-      />
-      {results.length > 0 && (
-        <div className="card" style={{ position: "absolute", zIndex: 10, width: "100%", padding: 4, marginTop: 2 }}>
-          {results.map(m => (
-            <div
-              key={m.userId}
-              style={{ padding: "6px 8px", cursor: "pointer" }}
-              onClick={() => { onPick(m); setQuery(""); setResults([]); }}
-            >
-              {m.displayName} <span className="muted">@{m.username}</span>
-            </div>
-          ))}
-        </div>
-      )}
+    <div className="card">
+      <div className="field">
+        <label>Department name</label>
+        <input value={form.name} onChange={e => set("name", e.target.value)} />
+      </div>
+      {roleSelect("Access role", "access_role_id")}
+      {roleSelect("Staff role", "staff_role_id")}
+      {roleSelect("Applicant role", "applicant_role_id")}
+      {roleSelect("Leave of absence role", "loa_role_id")}
+
+      <div className="field">
+        <label>Admin roles (full structural access to this department)</label>
+        <RolePicker roles={roles} selected={form.admin_role_ids} onChange={v => set("admin_role_ids", v)} />
+      </div>
+      <div className="field">
+        <label>Manager roles (roster + applications + leave, no settings access)</label>
+        <RolePicker roles={roles} selected={form.manager_role_ids} onChange={v => set("manager_role_ids", v)} />
+      </div>
+
+      <button className="btn" disabled={saving} onClick={save}>{saving ? "Saving..." : "Save settings"}</button>
+      {saved && <span className="muted" style={{ marginLeft: 10 }}>Saved.</span>}
     </div>
   );
 }
@@ -54,8 +102,10 @@ export default function DepartmentPage() {
   const { guildId, deptId } = router.query;
 
   const [department, setDepartment] = useState(null);
+  const [tier, setTier] = useState(null);
   const [plan, setPlan] = useState(null);
-  const [slots, setSlots] = useState(null);
+  const [roles, setRoles] = useState(null);
+  const [sections, setSections] = useState(null);
   const [error, setError] = useState(null);
   const [status, setStatus] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -67,36 +117,31 @@ export default function DepartmentPage() {
       apiFetch(`/guilds/${guildId}/departments/${deptId}`),
       apiFetch(`/guilds/${guildId}/departments/${deptId}/data/roster`),
       apiFetch(`/guilds/${guildId}`),
+      apiFetch(`/guilds/${guildId}/roles`),
     ])
-      .then(([deptData, rosterData, guildData]) => {
+      .then(([deptData, rosterData, guildData, roleData]) => {
         setDepartment(deptData.department);
-        setSlots(rosterData.value.slots || []);
+        setTier(deptData.tier);
+        setSections(normalizeRoster(rosterData.value));
         setPlan(guildData.plan);
+        setRoles(roleData.roles);
       })
       .catch(setError);
   }, [guildId, deptId]);
 
   useEffect(load, [load]);
 
-  function updateSlot(id, patch) {
-    setSlots(prev => prev.map(s => (s.id === id ? { ...s, ...patch } : s)));
-  }
-
-  function removeSlot(id) {
-    setSlots(prev => prev.filter(s => s.id !== id));
-  }
-
-  async function save() {
+  async function saveRoster() {
     setSaving(true);
     setStatus(null);
     try {
       await apiFetch(`/guilds/${guildId}/departments/${deptId}/data/roster`, {
         method: "PUT",
-        body: { value: { slots } },
+        body: { value: { sections } },
       });
       setStatus({ type: "ok", message: "Roster saved." });
     } catch (err) {
-      setError(err);
+      setStatus({ type: "error", message: err.body?.message || err.message });
     } finally {
       setSaving(false);
     }
@@ -109,7 +154,7 @@ export default function DepartmentPage() {
       const result = await apiFetch(`/guilds/${guildId}/departments/${deptId}/roster/sync`, { method: "POST" });
       setStatus({
         type: result.failed.length ? "error" : "ok",
-        message: `Synced ${result.synced} member${result.synced === 1 ? "" : "s"}.` +
+        message: `Added ${result.added} role${result.added === 1 ? "" : "s"}, removed ${result.removed}.` +
           (result.failed.length ? ` Failed for ${result.failed.length}.` : ""),
       });
     } catch (err) {
@@ -120,81 +165,62 @@ export default function DepartmentPage() {
   }
 
   if (error) return <div className="container"><div className="card error">{error.body?.message || error.message}</div></div>;
-  if (!department || !slots) return <div className="container"><p className="muted">Loading...</p></div>;
+  if (!department || !sections || !roles) return <div className="container"><p className="muted">Loading...</p></div>;
+
+  const canManage = tier === "manage" || tier === "admin";
+  const canAdmin = tier === "admin";
 
   return (
     <div className="container">
       <h1>{department.name}</h1>
-      <div className="card">
-        <p className="muted">Access role: {department.access_role_id || "none set"}</p>
-        <p className="muted">Staff role: {department.staff_role_id || "none set — set one to enable role sync"}</p>
-      </div>
 
       <h2>Roster</h2>
-      {status && <div className="card" style={{ borderColor: status.type === "error" ? "#f28b82" : undefined }}>{status.message}</div>}
+      <RosterTable sections={sections} />
 
-      <div className="card">
-        {slots.map(slot => (
-          <div key={slot.id} style={{ display: "flex", gap: 8, marginBottom: 10, alignItems: "center" }}>
-            <input
-              style={{ flex: "0 0 160px" }}
-              placeholder="Post / rank"
-              value={slot.title}
-              onChange={e => updateSlot(slot.id, { title: e.target.value })}
-            />
-            <div style={{ flex: 1 }}>
-              {slot.userId ? (
-                <div className="muted">
-                  {slot.displayName} <span style={{ opacity: 0.6 }}>({slot.userId})</span>{" "}
-                  <a href="#" onClick={e => { e.preventDefault(); updateSlot(slot.id, { userId: "", displayName: "" }); }}>change</a>
-                </div>
-              ) : (
-                <MemberPicker guildId={guildId} onPick={m => updateSlot(slot.id, { userId: m.userId, displayName: m.displayName })} />
-              )}
-            </div>
-            <button className="btn secondary" onClick={() => removeSlot(slot.id)}>Remove</button>
+      {canManage && (
+        <>
+          <h2 style={{ marginTop: 32 }}>Manager Panel</h2>
+          {status && <div className="card" style={{ borderColor: status.type === "error" ? "#f28b82" : undefined }}>{status.message}</div>}
+
+          <RosterEditor guildId={guildId} sections={sections} onChangeSections={setSections} roles={roles} />
+
+          <div style={{ display: "flex", gap: 10, margin: "12px 0 24px" }}>
+            <button className="btn" disabled={saving} onClick={saveRoster}>{saving ? "Saving..." : "Save roster"}</button>
+            <button className="btn secondary" disabled={syncing} onClick={sync}>
+              {syncing ? "Syncing..." : "Sync Discord roles"}
+            </button>
           </div>
-        ))}
 
-        <button className="btn secondary" onClick={() => setSlots(prev => [...prev, newSlot()])}>+ Add slot</button>
-      </div>
+          {plan?.features?.applications ? (
+            <ApplicationsPanel guildId={guildId} deptId={deptId} showQuestionEditor={canAdmin} />
+          ) : (
+            <div className="card"><p className="muted">Applications aren't available on the {plan?.key} plan.</p></div>
+          )}
 
-      <div style={{ display: "flex", gap: 10 }}>
-        <button className="btn" disabled={saving} onClick={save}>{saving ? "Saving..." : "Save roster"}</button>
-        <button className="btn secondary" disabled={syncing || !department.staff_role_id} onClick={sync}>
-          {syncing ? "Syncing..." : "Sync Discord roles"}
-        </button>
-      </div>
-
-      <div style={{ marginTop: 32 }}>
-        {plan?.features?.applications ? (
-          <ApplicationsPanel guildId={guildId} deptId={deptId} />
-        ) : (
-          <div className="card">
-            <p className="muted">Applications aren't available on the {plan?.key} plan. Upgrade from the guild dashboard to enable them.</p>
+          <div style={{ marginTop: 24 }}>
+            {plan?.features?.loa ? (
+              <LoaPanel guildId={guildId} deptId={deptId} />
+            ) : (
+              <div className="card"><p className="muted">Leave of absence isn't available on the {plan?.key} plan.</p></div>
+            )}
           </div>
-        )}
-      </div>
+        </>
+      )}
 
-      <div style={{ marginTop: 32 }}>
-        {plan?.features?.loa ? (
-          <LoaPanel guildId={guildId} deptId={deptId} />
-        ) : (
-          <div className="card">
-            <p className="muted">Leave of absence isn't available on the {plan?.key} plan. Upgrade from the guild dashboard to enable it.</p>
-          </div>
-        )}
-      </div>
+      {canAdmin && (
+        <>
+          <h2 style={{ marginTop: 32 }}>Admin Panel</h2>
+          <AdminSettings guildId={guildId} deptId={deptId} department={department} roles={roles} onSaved={load} />
 
-      <div style={{ marginTop: 32 }}>
-        {plan?.features?.sop ? (
-          <SopPanel guildId={guildId} deptId={deptId} />
-        ) : (
-          <div className="card">
-            <p className="muted">The SOP library isn't available on the {plan?.key} plan. Upgrade from the guild dashboard to enable it.</p>
+          <div style={{ marginTop: 24 }}>
+            {plan?.features?.sop ? (
+              <SopPanel guildId={guildId} deptId={deptId} />
+            ) : (
+              <div className="card"><p className="muted">The SOP library isn't available on the {plan?.key} plan.</p></div>
+            )}
           </div>
-        )}
-      </div>
+        </>
+      )}
     </div>
   );
 }

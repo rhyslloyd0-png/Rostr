@@ -59,6 +59,26 @@ async function removeMemberRole(guildId, userId, roleId) {
   return resp.ok || resp.status === 204;
 }
 
+// Every member in the guild, paginated 1000 at a time (Discord's max per
+// page) — needed for a real two-way role sync: to know a role should come
+// *off* someone, you have to know who currently holds it, and there's no
+// "list members with this role" endpoint, only "list all members." Same
+// Server Members Intent requirement as searchGuildMembers.
+async function getAllGuildMembers(guildId) {
+  const members = [];
+  let after = "0";
+  for (;;) {
+    const params = new URLSearchParams({ limit: "1000", after });
+    const resp = await discordFetch(`${API_BASE}/guilds/${guildId}/members?${params}`, { headers: botHeaders() });
+    if (!resp.ok) break;
+    const page = await resp.json();
+    members.push(...page);
+    if (page.length < 1000) break;
+    after = page[page.length - 1].user.id;
+  }
+  return members;
+}
+
 async function setMemberNickname(guildId, userId, nickname) {
   const resp = await discordFetch(`${API_BASE}/guilds/${guildId}/members/${userId}`, {
     method: "PATCH",
@@ -69,6 +89,6 @@ async function setMemberNickname(guildId, userId, nickname) {
 }
 
 module.exports = {
-  getGuild, getGuildRoles, getGuildChannels, getGuildMember, searchGuildMembers,
+  getGuild, getGuildRoles, getGuildChannels, getGuildMember, searchGuildMembers, getAllGuildMembers,
   addMemberRole, removeMemberRole, setMemberNickname,
 };

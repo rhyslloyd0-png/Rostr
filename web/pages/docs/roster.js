@@ -9,20 +9,26 @@ export default function RosterDoc() {
       <p>Every department has a roster: a list of slots, each optionally assigned to a real Discord member.</p>
 
       <h2>Building a roster</h2>
+      <p>A roster is organized into sections (e.g. "Gold Command," "Ambulance Staff"), each holding any number of ranks.</p>
       <ul>
-        <li>Click "+ Add slot" and give it a title (a post, rank, or callsign).</li>
-        <li>Search for a Discord member by name to assign them — results come straight from your server's member list.</li>
+        <li>Add a section, give it a name and an optional description/color.</li>
+        <li>Add ranks within it — a title, callsign, driver level, certifications, and the date someone was appointed.</li>
+        <li>Search for a Discord member by name to assign them to a rank — results come straight from your server's member list.</li>
+        <li>Each rank can also have its own extra Discord roles beyond the department's general staff role (e.g. a "Command Staff" badge role for senior ranks only).</li>
         <li>Click "Save roster" once you're happy with it.</li>
       </ul>
 
       <h2>Syncing Discord roles</h2>
       <p>
-        "Sync Discord roles" applies the department's staff role to every member currently assigned to a slot. It's safe
-        to run repeatedly — applying a role someone already has does nothing.
+        "Sync Discord roles" is two-directional: it works out who <em>should</em> hold each role your roster controls
+        (the department's staff role, plus any rank-specific roles) from the roster itself, compares that against who
+        currently holds each role in Discord, and grants or revokes only the difference. Removing someone from the
+        roster and re-syncing takes their roles away automatically.
       </p>
       <p>
-        Role sync is currently one-directional: it grants the staff role to rostered members, but doesn't remove it from
-        someone taken off the roster. Remove that role by hand in Discord if needed, or edit the roster and re-sync.
+        Because of that, don't reuse a role that RostR manages for anything else — if a role is set as a department's
+        staff role or attached to a rank, sync treats holding that role as meaning "should be on this roster" and will
+        remove it from anyone it doesn't expect to have it.
       </p>
 
       <h2>Requirements</h2>

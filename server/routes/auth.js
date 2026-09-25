@@ -35,10 +35,12 @@ function safeReturnTo(returnTo, fallback) {
 }
 
 // GET /auth/discord/login — kicks off the combined "add bot + log in" flow
-// (default), or a plain identify-only login for applicants when
-// ?mode=identify&returnTo=/some/path is given (see discord/oauth.js).
+// (default), a plain identify-only login for applicants
+// (?mode=identify&returnTo=/some/path), or a re-login for an
+// already-onboarded person (?mode=login) that skips the add-to-server step
+// (see discord/oauth.js).
 router.get("/discord/login", async (req, res) => {
-  const mode = req.query.mode === "identify" ? "identify" : "bot";
+  const mode = ["identify", "login"].includes(req.query.mode) ? req.query.mode : "bot";
   const returnTo = safeReturnTo(req.query.returnTo, "/dashboard");
   const state = await issueState(returnTo);
   res.redirect(oauth.buildAuthorizeUrl(state, mode));

@@ -15,19 +15,24 @@ const REDIRECT_URI = process.env.DISCORD_REDIRECT_URI;
 // Send Messages (posting to an applications channel later).
 const BOT_PERMISSIONS = "268435488";
 
-// mode "bot" (default) is the guild-owner flow described above. mode
-// "identify" is for applicants/staff who just need to prove who they are
-// on Discord — e.g. to submit an application — without being prompted to
-// install the bot anywhere or pick a server.
+// mode "bot" (default) is the guild-owner flow described above — always
+// shows Discord's "Add to server" picker, which is right for actually
+// installing the bot but wrong for a plain re-login. mode "identify" is
+// for applicants/staff who just need to prove who they are on Discord.
+// mode "login" is for an already-onboarded person signing back into the
+// dashboard: same `identify guilds` grant as "bot" (so the dashboard's
+// server list still works) but without the `bot` scope, so Discord never
+// shows the add-to-server step.
 function buildAuthorizeUrl(state, mode = "bot") {
+  const scope = mode === "identify" ? "identify" : mode === "login" ? "identify guilds" : "bot identify guilds";
   const params = new URLSearchParams({
     client_id: CLIENT_ID,
     redirect_uri: REDIRECT_URI,
     response_type: "code",
-    scope: mode === "identify" ? "identify" : "bot identify guilds",
+    scope,
     state,
   });
-  if (mode !== "identify") params.set("permissions", BOT_PERMISSIONS);
+  if (mode === "bot") params.set("permissions", BOT_PERMISSIONS);
   return `https://discord.com/oauth2/authorize?${params.toString()}`;
 }
 

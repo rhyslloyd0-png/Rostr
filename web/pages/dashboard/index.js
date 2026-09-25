@@ -84,7 +84,7 @@ export default function DashboardHome() {
         <div className="container">
           <div className="card">
             <p>You need to sign in first.</p>
-            <a className="btn" href={loginUrl()}>Sign in with Discord</a>
+            <a className="btn" href={loginUrl({ mode: "login", returnTo: "/dashboard" })}>Sign in with Discord</a>
           </div>
         </div>
       </>
@@ -115,7 +115,7 @@ export default function DashboardHome() {
         {needsReauth && (
           <div className="card" style={{ marginTop: 16 }}>
             <p>Sign in again to see every server you can administer — this session was started without that permission.</p>
-            <a className="btn" href={loginUrl()}>Sign in with Discord</a>
+            <a className="btn" href={loginUrl({ mode: "login", returnTo: "/dashboard" })}>Sign in with Discord</a>
           </div>
         )}
 

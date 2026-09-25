@@ -8,57 +8,27 @@ import RosterEditor from "../../../../components/RosterEditor";
 import AdminPanel from "../../../../components/AdminPanel";
 import ApplicationsPanel from "../../../../components/ApplicationsPanel";
 import LoaPanel from "../../../../components/LoaPanel";
+import { normalizeRoster } from "../../../../lib/rosterLogic";
 
 const DEFAULT_DRIVER_LEVELS = ["1", "2", "3", "4", "5"];
 
-// Migrates older roster shapes into the current three-level
-// section (category) -> group (sub-category) -> rank (post) shape, matching
-// Midnight Roster's layout, so roster data saved under either of the two
-// earlier shapes doesn't just disappear.
-function normalizeRoster(value) {
-  const certCatalog = value.certCatalog || [];
-
-  if (value.sections?.length && value.sections[0].groups) {
-    return { sections: value.sections, certCatalog };
-  }
-
-  // Previous shape: sections with a flat `ranks` array, no group layer.
-  if (value.sections) {
-    return {
-      certCatalog,
-      sections: value.sections.map(s => ({
-        ...s,
-        groups: [{ id: `${s.id}-group`, name: "", ranks: s.ranks || [] }],
-        ranks: undefined,
-      })),
-    };
-  }
-
-  // Oldest shape: a single flat `{ slots: [...] }` list.
-  if (value.slots?.length) {
-    return {
-      certCatalog,
-      sections: [{
-        id: "migrated-staff",
-        name: "Staff",
-        groups: [{
-          id: "migrated-staff-group",
-          name: "",
-          ranks: value.slots.map(s => ({
-            id: s.id,
-            rank: s.title || "",
-            userId: s.userId || "",
-            discordUsername: "",
-            name: s.displayName || "",
-            certifications: [],
-            roleIds: [],
-          })),
-        }],
-      }],
-    };
-  }
-
-  return { sections: [], certCatalog };
+// Turns a /roster/sync response into a status banner, naming each failure
+// so it's actually fixable — almost always the bot's role sitting below
+// the role it's trying to grant, or a missing Manage Roles/Nicknames.
+function describeSync(result, prefix) {
+  const parts = [`Added ${result.added} role${result.added === 1 ? "" : "s"}`, `removed ${result.removed}`];
+  if (result.nicknamesSet) parts.push(`updated ${result.nicknamesSet} nickname${result.nicknamesSet === 1 ? "" : "s"}`);
+  const details = (result.failed || []).map(f => (f.kind === "nickname"
+    ? `Couldn't set ${f.user}'s nickname to "${f.nickname}"`
+    : `Couldn't ${f.action === "add" ? "give" : "remove"} ${f.role} ${f.action === "add" ? "to" : "from"} ${f.user}`));
+  return {
+    type: details.length ? "error" : "ok",
+    message: `${prefix}${parts.join(", ")}.`,
+    details,
+    hint: details.length
+      ? "Check the bot has Manage Roles and Manage Nicknames, and that its role sits above these roles and members in Server Settings → Roles."
+      : null,
+  };
 }
 
 export default function DepartmentPage() {
@@ -122,11 +92,7 @@ export default function DepartmentPage() {
     setStatus(null);
     try {
       const result = await apiFetch(`/guilds/${guildId}/departments/${deptId}/roster/sync`, { method: "POST" });
-      setStatus({
-        type: result.failed.length ? "error" : "ok",
-        message: `Added ${result.added} role${result.added === 1 ? "" : "s"}, removed ${result.removed}.` +
-          (result.failed.length ? ` Failed for ${result.failed.length}.` : ""),
-      });
+      setStatus(describeSync(result, ""));
     } catch (err) {
       setStatus({ type: "error", message: err.body?.message || err.message });
     } finally {
@@ -146,19 +112,38 @@ export default function DepartmentPage() {
         method: "PUT",
         body: { value: { sections: nextSections, certCatalog } },
       });
-      const result = await apiFetch(`/guilds/${guildId}/departments/${deptId}/roster/sync`, { method: "POST" });
-      setStatus({
-        type: result.failed.length ? "error" : "ok",
-        message: `Saved. Added ${result.added} role${result.added === 1 ? "" : "s"}, removed ${result.removed}.` +
-          (result.failed.length ? ` Failed for ${result.failed.length}.` : ""),
-      });
     } catch (err) {
-      setStatus({ type: "error", message: err.body?.message || err.message });
+      setStatus({ type: "error", message: `Couldn't save: ${err.body?.message || err.message}` });
+      return;
+    }
+    try {
+      const result = await apiFetch(`/guilds/${guildId}/departments/${deptId}/roster/sync`, { method: "POST" });
+      setStatus(describeSync(result, "Saved. "));
+    } catch (err) {
+      // A 400 here means there's nothing to sync yet (no roles or
+      // callsigns configured) — the save itself still went through.
+      setStatus(err.status === 400
+        ? { type: "ok", message: `Saved. ${err.body?.error || ""}` }
+        : { type: "error", message: `Saved, but Discord sync failed: ${err.body?.message || err.message}` });
     }
   }
 
-  if (error) return <div className="container"><div className="card error">{error.body?.message || error.message}</div></div>;
-  if (!department || !sections || !roles) return <div className="container"><p className="muted">Loading...</p></div>;
+  if (error) {
+    return (
+      <>
+        <AppHeader guildId={guildId} activeDeptSlug={deptId} />
+        <div className="container"><div className="card error">{error.body?.message || error.message}</div></div>
+      </>
+    );
+  }
+  if (!department || !sections || !roles) {
+    return (
+      <>
+        <AppHeader guildId={guildId} activeDeptSlug={deptId} />
+        <div className="container"><div className="page-loading"><span className="spinner" /> Loading roster…</div></div>
+      </>
+    );
+  }
 
   const canManage = tier === "manage" || tier === "admin";
   const canAdmin = tier === "admin";
@@ -220,7 +205,17 @@ export default function DepartmentPage() {
           />
         )}
 
-        {status && <div className="card" style={{ borderColor: status.type === "error" ? "#f28b82" : undefined }}>{status.message}</div>}
+        {status && (
+          <div className="card" style={{ borderColor: status.type === "error" ? "#f28b82" : undefined }}>
+            {status.message}
+            {status.details?.length > 0 && (
+              <ul style={{ margin: "8px 0 0", paddingLeft: 18, fontSize: 13 }}>
+                {status.details.map((d, i) => <li key={i}>{d}</li>)}
+              </ul>
+            )}
+            {status.hint && <p className="muted" style={{ margin: "8px 0 0", fontSize: 13 }}>{status.hint}</p>}
+          </div>
+        )}
 
         <h2 id="roster">Roster</h2>
         {mode === "view" ? (

@@ -483,6 +483,18 @@ label { display: block; font-size: 13px; margin-bottom: 6px; color: #a5abba; }
   font-size: 16px;
 }
 
+.page-loading { display: flex; align-items: center; gap: 10px; color: #8a90a0; padding: 40px 0; justify-content: center; }
+.spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid #333947;
+  border-top-color: var(--brand-blue-bright);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  flex-shrink: 0;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
 .template-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
 .template-card {
   text-align: left;

@@ -5,7 +5,9 @@ const { attachSession, requireAuth } = require("../middleware/session");
 const { requireGuildAccess } = require("../middleware/guildAccess");
 const { requireDepartmentMember, requireDepartmentManage, requireDepartmentAdmin, computeTier } = require("../middleware/departmentAccess");
 const { canCreateDepartment, requireFeature } = require("../config/plans");
-const { addMemberRole, removeMemberRole, getAllGuildMembers, getGuildMember, sendChannelMessage, setMemberNickname } = require("../discord/api");
+const { addMemberRole, removeMemberRole, getGuildRoles, getGuildMember, sendChannelMessage, setMemberNickname } = require("../discord/api");
+const { getMembers, recordRoleChange, recordNickname } = require("../discord/memberCache");
+const { postsOf, nicknameFor, desiredRoles, computeRoleChanges, mergeDesired, computeNicknameChanges } = require("../lib/rosterSync");
 const { uniqueDepartmentSlug } = require("../db/slug");
 
 const router = express.Router({ mergeParams: true });
@@ -22,12 +24,6 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 
 // uploader's own filename).
 function sanitizeFilename(name) {
   return String(name).replace(/[\x00-\x1f"]/g, "_");
-}
-
-// Discord nickname convention (matches Midnight Roster): "<callsign> | <last name>".
-function lastNameOf(fullName) {
-  const parts = String(fullName || "").trim().split(/\s+/);
-  return parts[parts.length - 1] || "";
 }
 
 // Department rows carry the banner image as bytea — strip it before a row
@@ -165,72 +161,76 @@ router.put("/:deptId/data/:key", requireDataWriteAccess, async (req, res) => {
 // Two-way sync: for every role this department's roster controls (its
 // staff_role_id, plus whatever roleIds are set on individual ranks), works
 // out who *should* hold it from the roster JSON, compares that against who
-// *currently* holds it in Discord (getAllGuildMembers — there's no "list
+// *currently* holds it in Discord (the full member list — there's no "list
 // members with this role" endpoint, so a full member list is the only way
 // to find people who need a role taken away), and grants/revokes only the
 // difference. This is what makes removing someone from the roster actually
 // remove their roles instead of just leaving them assigned forever.
 router.post("/:deptId/roster/sync", requireDepartmentManage, async (req, res) => {
-  const { rows: dataRows } = await pool.query(
-    "SELECT value FROM department_data WHERE department_id = $1 AND data_key = 'roster'",
-    [req.department.id]
+  const { rows: guildDepts } = await pool.query(
+    `SELECT d.id, d.staff_role_id, dd.value AS roster
+     FROM departments d
+     LEFT JOIN department_data dd ON dd.department_id = d.id AND dd.data_key = 'roster'
+     WHERE d.guild_id = $1`,
+    [req.guild.id]
   );
-  const sections = dataRows.length ? (dataRows[0].value.sections || []) : [];
-  const allRanks = sections.flatMap(s => (s.groups || []).flatMap(g => g.ranks || []));
+  const own = guildDepts.find(d => d.id === req.department.id);
+  const sections = own?.roster?.sections || [];
 
-  // roleId -> Set of userIds who should hold it
-  const desired = new Map();
-  function want(roleId, userId) {
-    if (!roleId || !userId) return;
-    if (!desired.has(roleId)) desired.set(roleId, new Set());
-    desired.get(roleId).add(userId);
-  }
-  for (const rank of allRanks) {
-    if (!rank.userId) continue;
-    want(req.department.staff_role_id, rank.userId);
-    for (const roleId of rank.roleIds || []) want(roleId, rank.userId);
-  }
+  const ownDesired = desiredRoles(req.department, sections);
+  const guildDesired = mergeDesired(guildDepts.map(d => desiredRoles(d, d.roster?.sections)));
+  const hasNicknames = postsOf(sections).some(p => nicknameFor(p));
 
-  // Nickname follows the same "callsign | last name" convention as
-  // Midnight Roster — set on every sync, not just on assignment, so a
-  // callsign edited afterward still gets picked up next time this runs.
-  const nicknameTargets = allRanks.filter(r => r.userId && r.callsign);
-
-  if (desired.size === 0 && nicknameTargets.length === 0) {
+  if (ownDesired.size === 0 && !hasNicknames) {
     return res.status(400).json({ error: "This department has no staff role, rank roles, or callsigned posts to sync yet" });
   }
 
-  const members = await getAllGuildMembers(req.guild.id);
-  const changes = [];
-  for (const [roleId, desiredUserIds] of desired) {
-    const currentHolders = new Set(members.filter(m => m.roles?.includes(roleId)).map(m => m.user.id));
-    for (const userId of desiredUserIds) {
-      if (!currentHolders.has(userId)) changes.push({ userId, roleId, action: "add" });
-    }
-    for (const userId of currentHolders) {
-      if (!desiredUserIds.has(userId)) changes.push({ userId, roleId, action: "remove" });
-    }
-  }
+  const members = await getMembers(req.guild.id);
+  const roleChanges = computeRoleChanges(ownDesired, guildDesired, members);
+  const nicknameChanges = computeNicknameChanges(sections, members, req.guild.owner_discord_id);
 
-  const results = await Promise.all(
-    changes.map(async c => ({
-      ...c,
-      ok: c.action === "add"
-        ? await addMemberRole(req.guild.id, c.userId, c.roleId)
-        : await removeMemberRole(req.guild.id, c.userId, c.roleId),
-    }))
-  );
-
-  await Promise.all(nicknameTargets.map(r => {
-    const suffix = r.nicknameOverride || lastNameOf(r.name);
-    const nickname = `${r.callsign} | ${suffix}`.slice(0, 32);
-    return setMemberNickname(req.guild.id, r.userId, nickname).catch(() => {});
+  const roleResults = await Promise.all(roleChanges.map(async c => {
+    const ok = c.action === "add"
+      ? await addMemberRole(req.guild.id, c.userId, c.roleId)
+      : await removeMemberRole(req.guild.id, c.userId, c.roleId);
+    if (ok) recordRoleChange(req.guild.id, c.userId, c.roleId, c.action);
+    return { ...c, ok };
   }));
 
+  const nicknameResults = await Promise.all(nicknameChanges.map(async c => {
+    const ok = await setMemberNickname(req.guild.id, c.userId, c.nickname).catch(() => false);
+    if (ok) recordNickname(req.guild.id, c.userId, c.nickname);
+    return { ...c, ok };
+  }));
+
+  const failedRoles = roleResults.filter(r => !r.ok);
+  const failedNicknames = nicknameResults.filter(r => !r.ok);
+
+  // Only look role names up when there's something to report — resolving
+  // IDs to names is what makes the failure message actually actionable.
+  let roleNames = new Map();
+  if (failedRoles.length) {
+    const roles = await getGuildRoles(req.guild.id).catch(() => []);
+    roleNames = new Map(roles.map(r => [r.id, r.name]));
+  }
+  const memberName = userId => {
+    const m = members.find(x => x.user.id === userId);
+    return m?.nick || m?.user?.global_name || m?.user?.username || userId;
+  };
+
   res.json({
-    added: results.filter(r => r.ok && r.action === "add").length,
-    removed: results.filter(r => r.ok && r.action === "remove").length,
-    failed: results.filter(r => !r.ok).map(r => ({ userId: r.userId, roleId: r.roleId, action: r.action })),
+    added: roleResults.filter(r => r.ok && r.action === "add").length,
+    removed: roleResults.filter(r => r.ok && r.action === "remove").length,
+    nicknamesSet: nicknameResults.filter(r => r.ok).length,
+    failed: [
+      ...failedRoles.map(r => ({
+        kind: "role",
+        action: r.action,
+        user: memberName(r.userId),
+        role: roleNames.get(r.roleId) || r.roleId,
+      })),
+      ...failedNicknames.map(r => ({ kind: "nickname", user: memberName(r.userId), nickname: r.nickname })),
+    ],
   });
 });
 

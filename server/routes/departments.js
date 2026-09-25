@@ -5,7 +5,7 @@ const { attachSession, requireAuth } = require("../middleware/session");
 const { requireGuildAccess } = require("../middleware/guildAccess");
 const { requireDepartmentMember, requireDepartmentManage, requireDepartmentAdmin, computeTier } = require("../middleware/departmentAccess");
 const { canCreateDepartment, requireFeature } = require("../config/plans");
-const { addMemberRole, removeMemberRole, getAllGuildMembers, getGuildMember, sendChannelMessage } = require("../discord/api");
+const { addMemberRole, removeMemberRole, getAllGuildMembers, getGuildMember, sendChannelMessage, setMemberNickname } = require("../discord/api");
 const { uniqueDepartmentSlug } = require("../db/slug");
 
 const router = express.Router({ mergeParams: true });
@@ -22,6 +22,12 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 
 // uploader's own filename).
 function sanitizeFilename(name) {
   return String(name).replace(/[\x00-\x1f"]/g, "_");
+}
+
+// Discord nickname convention (matches Midnight Roster): "<callsign> | <last name>".
+function lastNameOf(fullName) {
+  const parts = String(fullName || "").trim().split(/\s+/);
+  return parts[parts.length - 1] || "";
 }
 
 // Department rows carry the banner image as bytea — strip it before a row
@@ -185,8 +191,13 @@ router.post("/:deptId/roster/sync", requireDepartmentManage, async (req, res) =>
     for (const roleId of rank.roleIds || []) want(roleId, rank.userId);
   }
 
-  if (desired.size === 0) {
-    return res.status(400).json({ error: "This department has no staff role or rank roles configured yet" });
+  // Nickname follows the same "callsign | last name" convention as
+  // Midnight Roster — set on every sync, not just on assignment, so a
+  // callsign edited afterward still gets picked up next time this runs.
+  const nicknameTargets = allRanks.filter(r => r.userId && r.callsign);
+
+  if (desired.size === 0 && nicknameTargets.length === 0) {
+    return res.status(400).json({ error: "This department has no staff role, rank roles, or callsigned posts to sync yet" });
   }
 
   const members = await getAllGuildMembers(req.guild.id);
@@ -209,6 +220,12 @@ router.post("/:deptId/roster/sync", requireDepartmentManage, async (req, res) =>
         : await removeMemberRole(req.guild.id, c.userId, c.roleId),
     }))
   );
+
+  await Promise.all(nicknameTargets.map(r => {
+    const suffix = r.nicknameOverride || lastNameOf(r.name);
+    const nickname = `${r.callsign} | ${suffix}`.slice(0, 32);
+    return setMemberNickname(req.guild.id, r.userId, nickname).catch(() => {});
+  }));
 
   res.json({
     added: results.filter(r => r.ok && r.action === "add").length,

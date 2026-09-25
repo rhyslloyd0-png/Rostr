@@ -14,6 +14,11 @@ function todayDateStr() {
   return new Date().toISOString().slice(0, 10);
 }
 
+function lastNameOf(fullName) {
+  const parts = String(fullName || "").trim().split(/\s+/);
+  return parts[parts.length - 1] || "";
+}
+
 // Loads the guild's full member list once and hands back a filter function
 // — mirrors Midnight Roster's "load the whole list, filter client-side"
 // picker instead of hitting Discord's search endpoint on every keystroke.
@@ -42,6 +47,7 @@ function vacatePost(post) {
   post.since = "";
   post.driverLevel = "";
   post.certifications = [];
+  post.nicknameOverride = "";
 }
 
 // Assigns `member` (or vacates, if null) into the post at the given
@@ -80,6 +86,7 @@ function applyAssignment(sections, { sectionId, groupId, rankId }, member) {
   target.discordUsername = member.username;
   target.name = member.displayName;
   target.since = todayDateStr();
+  target.nicknameOverride = "";
   if (carried) {
     target.driverLevel = carried.driverLevel || "";
     target.certifications = carried.certifications || [];
@@ -240,7 +247,7 @@ function CertPills({ catalog, selected, onToggle }) {
   );
 }
 
-function RankRow({ post, sectionId, groupId, roles, certCatalog, driverLevels, members, canEditStructure, onChange, onRemove, onAssign, onPromote }) {
+function RankRow({ post, sectionId, groupId, roles, certCatalog, driverLevels, members, canEditStructure, onChange, onRemove, onAssign, onPromote, onEditNickname }) {
   const [showRoles, setShowRoles] = useState(false);
 
   function patch(fields) {
@@ -250,6 +257,16 @@ function RankRow({ post, sectionId, groupId, roles, certCatalog, driverLevels, m
   function toggleCert(c) {
     const current = post.certifications || [];
     patch({ certifications: current.includes(c) ? current.filter(x => x !== c) : [...current, c] });
+  }
+
+  function editNickname() {
+    const seed = post.nicknameOverride || lastNameOf(post.name);
+    const value = window.prompt(
+      `Discord nickname will be "${post.callsign || "?"} | ${seed || "..."}" — enter the part after the callsign:`,
+      seed
+    );
+    if (value === null) return;
+    onEditNickname(sectionId, groupId, post.id, value.trim());
   }
 
   return (
@@ -287,7 +304,19 @@ function RankRow({ post, sectionId, groupId, roles, certCatalog, driverLevels, m
         <td style={{ minWidth: 170 }}>
           <AssignSearch post={post} members={members} onAssign={m => onAssign(sectionId, groupId, post.id, m)} />
         </td>
-        <td className="discord-cell">{post.userId ? (post.discordUsername ? `@${post.discordUsername}` : post.userId) : "—"}</td>
+        <td className="discord-cell">
+          {post.userId ? (post.discordUsername ? `@${post.discordUsername}` : post.userId) : "—"}
+          {post.userId && post.callsign && (
+            <button
+              className="btn secondary change-rank-btn"
+              style={{ marginLeft: 6 }}
+              onClick={editNickname}
+              title="Set what shows after the callsign in their Discord nickname"
+            >
+              Edit name
+            </button>
+          )}
+        </td>
         <td>
           <select style={{ width: 64 }} value={post.driverLevel || ""} onChange={e => patch({ driverLevel: e.target.value })}>
             <option value="">—</option>
@@ -320,7 +349,7 @@ function RankRow({ post, sectionId, groupId, roles, certCatalog, driverLevels, m
 
 // ---- Group (sub-category) ------------------------------------------------
 
-function GroupEditor({ section, group, roles, certCatalog, driverLevels, members, canEditStructure, onChange, onRemove, onAssign, onPromote }) {
+function GroupEditor({ section, group, roles, certCatalog, driverLevels, members, canEditStructure, onChange, onRemove, onAssign, onPromote, onEditNickname }) {
   const [editingName, setEditingName] = useState(false);
   const [positionsInput, setPositionsInput] = useState(String((group.ranks || []).length));
 
@@ -422,6 +451,7 @@ function GroupEditor({ section, group, roles, certCatalog, driverLevels, members
                   onRemove={() => removeRank(r.id)}
                   onAssign={onAssign}
                   onPromote={onPromote}
+                  onEditNickname={onEditNickname}
                 />
               ))}
             </tbody>
@@ -435,7 +465,7 @@ function GroupEditor({ section, group, roles, certCatalog, driverLevels, members
 
 // ---- Section (category) --------------------------------------------------
 
-function SectionEditor({ section, roles, certCatalog, driverLevels, members, canEditStructure, onChange, onRemove, onMoveUp, onMoveDown, onAssign, onPromote }) {
+function SectionEditor({ section, roles, certCatalog, driverLevels, members, canEditStructure, onChange, onRemove, onMoveUp, onMoveDown, onAssign, onPromote, onEditNickname }) {
   const [editing, setEditing] = useState(false);
 
   function patch(fields) {
@@ -504,6 +534,7 @@ function SectionEditor({ section, roles, certCatalog, driverLevels, members, can
           onRemove={() => removeGroup(g.id)}
           onAssign={onAssign}
           onPromote={onPromote}
+          onEditNickname={onEditNickname}
         />
       ))}
       {canEditStructure && <button className="btn secondary" onClick={addGroup} style={{ marginTop: 6 }}>+ Add sub-category</button>}
@@ -548,6 +579,21 @@ export default function RosterEditor({ guildId, sections, onChangeSections, onAs
     onAssign(applyAssignment(sections, { sectionId, groupId, rankId }, member));
   }, [sections, onAssign]);
 
+  // Overrides just the part of the Discord nickname after "callsign | " —
+  // the roster's own Name column (who's assigned) is untouched. Saves and
+  // syncs immediately so the nickname change actually reaches Discord.
+  const handleEditNickname = useCallback((sectionId, groupId, rankId, nicknameOverride) => {
+    const next = sections.map(s => (
+      s.id !== sectionId ? s : {
+        ...s,
+        groups: s.groups.map(g => (
+          g.id !== groupId ? g : { ...g, ranks: g.ranks.map(r => (r.id === rankId ? { ...r, nicknameOverride } : r)) }
+        )),
+      }
+    ));
+    onAssign(next);
+  }, [sections, onAssign]);
+
   function handlePromoteConfirm(targetSectionId, rank) {
     const placement = findOrCreatePlacement(sections, targetSectionId, rank);
     if (!placement?.groupId) { setPromoting(null); return; }
@@ -586,6 +632,7 @@ export default function RosterEditor({ guildId, sections, onChangeSections, onAs
           onMoveDown={() => moveSection(s.id, 1)}
           onAssign={handleAssign}
           onPromote={setPromoting}
+          onEditNickname={handleEditNickname}
         />
       ))}
       {canEditStructure && <button className="btn secondary" onClick={addSection} style={{ marginTop: 4 }}>+ Add category</button>}

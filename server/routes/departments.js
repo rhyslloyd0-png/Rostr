@@ -5,7 +5,7 @@ const { attachSession, requireAuth } = require("../middleware/session");
 const { requireGuildAccess } = require("../middleware/guildAccess");
 const { requireDepartmentMember, requireDepartmentManage, requireDepartmentAdmin, computeTier } = require("../middleware/departmentAccess");
 const { canCreateDepartment, requireFeature } = require("../config/plans");
-const { addMemberRole, removeMemberRole, getAllGuildMembers } = require("../discord/api");
+const { addMemberRole, removeMemberRole, getAllGuildMembers, sendChannelMessage } = require("../discord/api");
 const { uniqueDepartmentSlug } = require("../db/slug");
 
 const router = express.Router({ mergeParams: true });
@@ -251,12 +251,48 @@ router.patch("/:deptId/applications/:appId", requireDepartmentManage, requireFea
   if (status === "approved") {
     if (req.department.staff_role_id) await addMemberRole(req.guild.id, application.user_id, req.department.staff_role_id);
     if (req.department.applicant_role_id) await removeMemberRole(req.guild.id, application.user_id, req.department.applicant_role_id);
+    await placeApprovedApplicant(req.department.id, application);
   } else if (status === "denied" && req.department.applicant_role_id) {
     await removeMemberRole(req.guild.id, application.user_id, req.department.applicant_role_id);
   }
 
   res.json({ application });
 });
+
+// Drops an approved applicant into the first vacant rank slot of the
+// admin-configured "placement" section (see PUT /:deptId/data/placement),
+// so approving someone actually seats them on the roster instead of just
+// swapping their Discord roles and leaving a manager to add them by hand.
+// Silently does nothing if no placement section is configured, the section
+// no longer exists, or every slot in it is already filled.
+async function placeApprovedApplicant(departmentId, application) {
+  const { rows: placementRows } = await pool.query(
+    "SELECT value FROM department_data WHERE department_id = $1 AND data_key = 'placement'",
+    [departmentId]
+  );
+  const sectionId = placementRows[0]?.value?.sectionId;
+  if (!sectionId) return;
+
+  const { rows: rosterRows } = await pool.query(
+    "SELECT value FROM department_data WHERE department_id = $1 AND data_key = 'roster'",
+    [departmentId]
+  );
+  if (!rosterRows.length) return;
+  const roster = rosterRows[0].value;
+  const section = (roster.sections || []).find(s => s.id === sectionId);
+  if (!section) return;
+  const vacantRank = (section.ranks || []).find(r => !r.userId);
+  if (!vacantRank) return;
+
+  vacantRank.userId = application.user_id;
+  vacantRank.name = application.display_name;
+  vacantRank.since = new Date().toISOString().slice(0, 10);
+
+  await pool.query(
+    "UPDATE department_data SET value = $1 WHERE department_id = $2 AND data_key = 'roster'",
+    [JSON.stringify(roster), departmentId]
+  );
+}
 
 // ---- Leave of absence (manage-tier: admin or manager review queue) ----
 // Self-service submit/status for staff lives in routes/loa.js. Activating/
@@ -384,6 +420,19 @@ router.get("/:deptId/sop/:fileId/download", requireDepartmentAdmin, requireFeatu
   res.set("Content-Type", file.content_type);
   res.set("Content-Disposition", `attachment; filename="${sanitizeFilename(file.display_name || file.filename)}"`);
   res.send(file.data);
+});
+
+// Lets an admin post a message to a Discord channel through the bot without
+// leaving the dashboard — e.g. announcing a roster update. Deliberately
+// plain-text only (no embeds/mentions parsing) to keep this a simple utility
+// rather than a full bot-command surface.
+router.post("/:deptId/announce", requireDepartmentAdmin, async (req, res) => {
+  const { channelId, message } = req.body;
+  if (!channelId || !message || !message.trim()) {
+    return res.status(400).json({ error: "channelId and message are required" });
+  }
+  await sendChannelMessage(channelId, message.trim());
+  res.json({ ok: true });
 });
 
 module.exports = router;

@@ -372,3 +372,17 @@ label { display: block; font-size: 13px; margin-bottom: 6px; color: #a5abba; }
   .loa-cal-grid { grid-template-columns: repeat(7, minmax(36px, 1fr)); }
   .loa-cal-cell { min-height: 48px; padding: 4px; }
 }
+
+.admin-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+.admin-tab {
+  background: #171a21;
+  border: 1px solid #262b36;
+  color: #c4c8d4;
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.admin-tab:hover { border-color: #3a4152; }
+.admin-tab-active { background: var(--brand-blue); border-color: var(--brand-blue); color: #fff; }

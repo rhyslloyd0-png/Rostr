@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { apiFetch } from "../lib/api";
 
-function QuestionEditor({ guildId, deptId }) {
+export function QuestionEditor({ guildId, deptId }) {
   const [fields, setFields] = useState(null);
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState(null);

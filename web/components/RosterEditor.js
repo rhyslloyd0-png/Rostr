@@ -8,7 +8,7 @@ function newId(prefix) {
   return `${prefix}-${Date.now()}-${idCounter}`;
 }
 
-const DRIVER_LEVELS = ["1", "2", "3", "4", "5"];
+const DEFAULT_DRIVER_LEVELS = ["1", "2", "3", "4", "5"];
 
 function CertPills({ catalog, selected, onToggle }) {
   if (!catalog.length) return <span className="muted">—</span>;
@@ -38,7 +38,7 @@ function CertPills({ catalog, selected, onToggle }) {
   );
 }
 
-function RankRow({ rank, roles, certCatalog, guildId, onChange, onRemove }) {
+function RankRow({ rank, roles, certCatalog, driverLevels, guildId, onChange, onRemove }) {
   const [showRoles, setShowRoles] = useState(false);
 
   function patch(fields) {
@@ -73,7 +73,7 @@ function RankRow({ rank, roles, certCatalog, guildId, onChange, onRemove }) {
         <td style={{ padding: 6 }}>
           <select style={{ width: 70 }} value={rank.driverLevel || ""} onChange={e => patch({ driverLevel: e.target.value })}>
             <option value="">—</option>
-            {DRIVER_LEVELS.map(l => <option key={l} value={l}>{l}</option>)}
+            {driverLevels.map(l => <option key={l} value={l}>{l}</option>)}
           </select>
         </td>
         <td style={{ padding: 6, minWidth: 180 }}>
@@ -98,7 +98,7 @@ function RankRow({ rank, roles, certCatalog, guildId, onChange, onRemove }) {
   );
 }
 
-function SectionEditor({ section, roles, certCatalog, guildId, onChange, onRemove, onMoveUp, onMoveDown }) {
+function SectionEditor({ section, roles, certCatalog, driverLevels, guildId, onChange, onRemove, onMoveUp, onMoveDown }) {
   const [editing, setEditing] = useState(false);
   const [positionsInput, setPositionsInput] = useState(String((section.ranks || []).length));
 
@@ -189,6 +189,7 @@ function SectionEditor({ section, roles, certCatalog, guildId, onChange, onRemov
                 rank={r}
                 roles={roles}
                 certCatalog={certCatalog}
+                driverLevels={driverLevels}
                 guildId={guildId}
                 onChange={u => updateRank(r.id, u)}
                 onRemove={() => removeRank(r.id)}
@@ -202,7 +203,7 @@ function SectionEditor({ section, roles, certCatalog, guildId, onChange, onRemov
   );
 }
 
-export default function RosterEditor({ guildId, sections, onChangeSections, roles, certCatalog = [] }) {
+export default function RosterEditor({ guildId, sections, onChangeSections, roles, certCatalog = [], driverLevels = DEFAULT_DRIVER_LEVELS }) {
   function addSection() {
     onChangeSections([...sections, { id: newId("section"), name: "", ranks: [] }]);
   }
@@ -232,6 +233,7 @@ export default function RosterEditor({ guildId, sections, onChangeSections, role
           section={s}
           roles={roles}
           certCatalog={certCatalog}
+          driverLevels={driverLevels}
           guildId={guildId}
           onChange={u => updateSection(s.id, u)}
           onRemove={() => removeSection(s.id)}

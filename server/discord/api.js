@@ -88,7 +88,20 @@ async function setMemberNickname(guildId, userId, nickname) {
   return resp.ok;
 }
 
+async function sendChannelMessage(channelId, content) {
+  const resp = await discordFetch(`${API_BASE}/channels/${channelId}/messages`, {
+    method: "POST",
+    headers: { ...botHeaders(), "Content-Type": "application/json" },
+    body: JSON.stringify({ content }),
+  });
+  if (!resp.ok) {
+    const body = await resp.json().catch(() => ({}));
+    throw new Error(body.message || `Failed to send message: ${resp.status}`);
+  }
+  return resp.json();
+}
+
 module.exports = {
   getGuild, getGuildRoles, getGuildChannels, getGuildMember, searchGuildMembers, getAllGuildMembers,
-  addMemberRole, removeMemberRole, setMemberNickname,
+  addMemberRole, removeMemberRole, setMemberNickname, sendChannelMessage,
 };

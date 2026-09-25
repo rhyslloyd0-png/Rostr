@@ -12,8 +12,8 @@ function PostRow({ post }) {
       <td>
         {(post.certifications || []).length
           ? (
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
-              {post.certifications.map(c => <span key={c} className="tag">{c}</span>)}
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+              {post.certifications.map(c => <span key={c} className="cert-chip is-active">{c}</span>)}
             </div>
           )
           : <span className="muted">—</span>}
@@ -27,8 +27,8 @@ function Group({ group }) {
   const ranks = group.ranks || [];
   if (!ranks.length) return null;
   return (
-    <div style={{ marginBottom: 16 }}>
-      {group.name && <div className="roster-group-label" style={{ paddingLeft: 24 }}>{group.name}</div>}
+    <div className="roster-group">
+      {group.name && <div className="roster-group-label">{group.name}</div>}
       <div className="roster-table-wrap">
         <table className="roster-table">
           <thead>
@@ -56,15 +56,15 @@ function Section({ section }) {
   const groups = section.groups || [];
 
   return (
-    <div id={`section-${section.id}`} style={{ marginBottom: 28, scrollMarginTop: 80 }}>
+    <div id={`section-${section.id}`} className="roster-section" style={{ "--roster-accent": section.color || "#5fb4ff", scrollMarginTop: 80 }}>
       <div className="roster-section-head" style={{ cursor: "pointer" }} onClick={() => setOpen(o => !o)}>
         <span style={{ transform: open ? "rotate(0deg)" : "rotate(-90deg)", display: "inline-block", transition: "transform 0.15s", color: "#6b7180" }}>▾</span>
         <span className="roster-section-mark" style={{ background: section.color || "#5fb4ff" }} />
         <h3 className="roster-section-title">{section.name}</h3>
       </div>
-      {section.description && <p className="muted" style={{ margin: "4px 0 14px 28px" }}>{section.description}</p>}
+      {section.description && <p className="roster-section-sub">{section.description}</p>}
 
-      {open && <div style={{ marginTop: 12 }}>{groups.map(g => <Group key={g.id} group={g} />)}</div>}
+      {open && <div style={{ marginTop: 16 }}>{groups.map(g => <Group key={g.id} group={g} />)}</div>}
     </div>
   );
 }

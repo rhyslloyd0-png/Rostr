@@ -222,7 +222,7 @@ function PromoteModal({ sections, post, onConfirm, onClose }) {
 function CertPills({ catalog, selected, onToggle }) {
   if (!catalog.length) return <span className="muted">—</span>;
   return (
-    <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+    <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
       {catalog.map(c => {
         const active = selected.includes(c);
         return (
@@ -230,14 +230,7 @@ function CertPills({ catalog, selected, onToggle }) {
             key={c}
             type="button"
             onClick={() => onToggle(c)}
-            className="tag"
-            style={{
-              cursor: "pointer",
-              borderColor: active ? "var(--brand-blue-bright)" : "#333947",
-              background: active ? "rgba(95,180,255,0.15)" : "transparent",
-              color: active ? "var(--brand-blue-bright)" : "#6b7180",
-              fontWeight: active ? 700 : 400,
-            }}
+            className={`cert-chip${active ? " is-active" : ""}`}
           >
             {c}
           </button>
@@ -267,7 +260,7 @@ function RankRow({ post, sectionId, groupId, roles, certCatalog, driverLevels, m
             <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
               <input style={{ minWidth: 110, width: 110 }} value={post.rank} onChange={e => patch({ rank: e.target.value })} placeholder="Rank title" />
               {post.userId && (
-                <button className="btn secondary" style={{ padding: "4px 8px", fontSize: 12, whiteSpace: "nowrap" }} onClick={() => onPromote({ ...post, sectionId })}>
+                <button className="btn secondary change-rank-btn" onClick={() => onPromote({ ...post, sectionId })}>
                   Change rank
                 </button>
               )}
@@ -378,12 +371,14 @@ function GroupEditor({ section, group, roles, certCatalog, driverLevels, members
   }
 
   return (
-    <div style={{ marginBottom: 20, paddingLeft: 4, borderLeft: "2px solid #262b36" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, paddingLeft: 12 }}>
+    <div className="roster-group">
+      <div className="roster-group-toolbar">
         {editingName ? (
           <input style={{ flex: "1 1 160px" }} value={group.name} onChange={e => patch({ name: e.target.value })} placeholder="Sub-category label (optional)" />
         ) : (
-          <strong style={{ flex: "1 1 160px" }}>{group.name || "(unlabeled group)"}</strong>
+          <strong style={{ flex: "1 1 160px", fontSize: 13, textTransform: "uppercase", letterSpacing: "0.06em", color: "#c4c8d4" }}>
+            {group.name || "(unlabeled group)"}
+          </strong>
         )}
         {canEditStructure && (
           <>
@@ -466,8 +461,8 @@ function SectionEditor({ section, roles, certCatalog, driverLevels, members, can
   }
 
   return (
-    <div id={`section-${section.id}`} className="card" style={{ marginBottom: 16, scrollMarginTop: 80 }}>
-      <div className="roster-section-head" style={{ flexWrap: "wrap", marginBottom: 6 }}>
+    <div id={`section-${section.id}`} className="roster-section" style={{ "--roster-accent": section.color || "#5fb4ff", scrollMarginTop: 80 }}>
+      <div className="roster-section-head" style={{ flexWrap: "wrap", marginBottom: section.description || editing ? 6 : 14 }}>
         <span className="roster-section-mark" style={{ background: section.color || "#5fb4ff" }} />
         {editing ? (
           <input style={{ flex: "1 1 200px" }} value={section.name} onChange={e => patch({ name: e.target.value })} placeholder="Category name" />
@@ -485,9 +480,10 @@ function SectionEditor({ section, roles, certCatalog, driverLevels, members, can
         )}
       </div>
 
+      {!editing && section.description && <p className="roster-section-sub" style={{ marginBottom: 14 }}>{section.description}</p>}
       {editing && (
         <input
-          style={{ marginBottom: 10 }}
+          style={{ marginBottom: 14 }}
           placeholder="Description (optional)"
           value={section.description || ""}
           onChange={e => patch({ description: e.target.value })}
@@ -510,7 +506,7 @@ function SectionEditor({ section, roles, certCatalog, driverLevels, members, can
           onPromote={onPromote}
         />
       ))}
-      {canEditStructure && <button className="btn secondary" onClick={addGroup}>+ Add sub-category</button>}
+      {canEditStructure && <button className="btn secondary" onClick={addGroup} style={{ marginTop: 6 }}>+ Add sub-category</button>}
     </div>
   );
 }
@@ -592,7 +588,7 @@ export default function RosterEditor({ guildId, sections, onChangeSections, onAs
           onPromote={setPromoting}
         />
       ))}
-      {canEditStructure && <button className="btn secondary" onClick={addSection}>+ Add category</button>}
+      {canEditStructure && <button className="btn secondary" onClick={addSection} style={{ marginTop: 4 }}>+ Add category</button>}
 
       {promoting && (
         <PromoteModal

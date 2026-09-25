@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
 import { apiFetch } from "../../../lib/api";
 import AppHeader from "../../../components/AppHeader";
+import { ROSTER_TEMPLATES } from "../../../lib/rosterTemplates";
 
 export default function SetupDepartment() {
   const router = useRouter();
@@ -11,6 +12,7 @@ export default function SetupDepartment() {
   const [name, setName] = useState("");
   const [accessRoleId, setAccessRoleId] = useState("");
   const [staffRoleId, setStaffRoleId] = useState("");
+  const [templateKey, setTemplateKey] = useState("blank");
   const [error, setError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -30,6 +32,21 @@ export default function SetupDepartment() {
         method: "POST",
         body: { name, accessRoleId: accessRoleId || null, staffRoleId: staffRoleId || null },
       });
+
+      const template = ROSTER_TEMPLATES.find(t => t.key === templateKey);
+      if (template && template.key !== "blank") {
+        await Promise.all([
+          apiFetch(`/guilds/${guildId}/departments/${department.slug}/data/roster`, {
+            method: "PUT",
+            body: { value: { sections: template.sections, certCatalog: template.certCatalog } },
+          }),
+          apiFetch(`/guilds/${guildId}/departments/${department.slug}/data/driverLevels`, {
+            method: "PUT",
+            body: { value: { levels: template.driverLevels } },
+          }),
+        ]);
+      }
+
       router.push(`/dashboard/${guildId}/departments/${department.slug}`);
     } catch (err) {
       setError(err);
@@ -67,6 +84,24 @@ export default function SetupDepartment() {
               {roles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
             </select>
           </div>
+
+          <div className="field">
+            <label>Starting roster template</label>
+            <div className="template-grid">
+              {ROSTER_TEMPLATES.map(t => (
+                <button
+                  type="button"
+                  key={t.key}
+                  className={`template-card${templateKey === t.key ? " template-card-active" : ""}`}
+                  onClick={() => setTemplateKey(t.key)}
+                >
+                  <strong>{t.label}</strong>
+                  <p className="muted" style={{ margin: "4px 0 0", fontSize: 13 }}>{t.description}</p>
+                </button>
+              ))}
+            </div>
+          </div>
+
           <button className="btn" type="submit" disabled={submitting || !name}>
             {submitting ? "Creating..." : "Create department"}
           </button>

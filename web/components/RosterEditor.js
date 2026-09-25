@@ -247,7 +247,7 @@ function CertPills({ catalog, selected, onToggle }) {
   );
 }
 
-function RankRow({ post, sectionId, groupId, roles, certCatalog, driverLevels, members, onChange, onRemove, onAssign, onPromote }) {
+function RankRow({ post, sectionId, groupId, roles, certCatalog, driverLevels, members, canEditStructure, onChange, onRemove, onAssign, onPromote }) {
   const [showRoles, setShowRoles] = useState(false);
 
   function patch(fields) {
@@ -263,17 +263,33 @@ function RankRow({ post, sectionId, groupId, roles, certCatalog, driverLevels, m
     <>
       <tr style={{ borderTop: "1px solid #262b36" }}>
         <td style={{ padding: 6 }}>
-          <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
-            <input style={{ minWidth: 120 }} value={post.rank} onChange={e => patch({ rank: e.target.value })} placeholder="Rank title" />
-            {post.userId && (
-              <button className="btn secondary" style={{ padding: "4px 8px", fontSize: 12 }} onClick={() => onPromote({ ...post, sectionId })}>
-                Change rank
-              </button>
-            )}
-          </div>
+          {canEditStructure ? (
+            <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+              <input style={{ minWidth: 120 }} value={post.rank} onChange={e => patch({ rank: e.target.value })} placeholder="Rank title" />
+              {post.userId && (
+                <button className="btn secondary" style={{ padding: "4px 8px", fontSize: 12 }} onClick={() => onPromote({ ...post, sectionId })}>
+                  Change rank
+                </button>
+              )}
+            </div>
+          ) : post.userId ? (
+            <button
+              className="rank-promote-link"
+              onClick={() => onPromote({ ...post, sectionId })}
+              title="Change rank"
+            >
+              {post.rank || "(no rank)"}
+            </button>
+          ) : (
+            <span>{post.rank || <span className="muted">—</span>}</span>
+          )}
         </td>
         <td style={{ padding: 6 }}>
-          <input style={{ width: 90 }} value={post.callsign || ""} onChange={e => patch({ callsign: e.target.value })} placeholder="—" />
+          {canEditStructure ? (
+            <input style={{ width: 90 }} value={post.callsign || ""} onChange={e => patch({ callsign: e.target.value })} placeholder="—" />
+          ) : (
+            <span style={{ color: "#e0a640", fontFamily: "monospace" }}>{post.callsign || "—"}</span>
+          )}
         </td>
         <td style={{ padding: 6, minWidth: 170 }}>
           <AssignSearch post={post} members={members} onAssign={m => onAssign(sectionId, groupId, post.id, m)} />
@@ -289,27 +305,35 @@ function RankRow({ post, sectionId, groupId, roles, certCatalog, driverLevels, m
           <CertPills catalog={certCatalog} selected={post.certifications || []} onToggle={toggleCert} />
         </td>
         <td style={{ padding: 6 }}>
-          <input style={{ width: 130 }} type="date" value={post.since || ""} onChange={e => patch({ since: e.target.value })} />
+          {canEditStructure ? (
+            <input style={{ width: 130 }} type="date" value={post.since || ""} onChange={e => patch({ since: e.target.value })} />
+          ) : (
+            <span className="muted">{post.since || "—"}</span>
+          )}
         </td>
         <td style={{ padding: 6 }}>
-          <button className="btn secondary" onClick={onRemove} title="Remove rank" style={{ padding: "4px 10px" }}>✕</button>
+          {canEditStructure && (
+            <button className="btn secondary" onClick={onRemove} title="Remove rank" style={{ padding: "4px 10px" }}>✕</button>
+          )}
         </td>
       </tr>
-      <tr>
-        <td colSpan={8} style={{ padding: "0 6px 8px" }}>
-          <a href="#" onClick={e => { e.preventDefault(); setShowRoles(s => !s); }} style={{ fontSize: 12 }}>
-            {showRoles ? "Hide" : "Extra roles"} ({(post.roleIds || []).length})
-          </a>
-          {showRoles && <div style={{ marginTop: 6 }}><RolePicker roles={roles} selected={post.roleIds || []} onChange={roleIds => patch({ roleIds })} /></div>}
-        </td>
-      </tr>
+      {canEditStructure && (
+        <tr>
+          <td colSpan={8} style={{ padding: "0 6px 8px" }}>
+            <a href="#" onClick={e => { e.preventDefault(); setShowRoles(s => !s); }} style={{ fontSize: 12 }}>
+              {showRoles ? "Hide" : "Extra roles"} ({(post.roleIds || []).length})
+            </a>
+            {showRoles && <div style={{ marginTop: 6 }}><RolePicker roles={roles} selected={post.roleIds || []} onChange={roleIds => patch({ roleIds })} /></div>}
+          </td>
+        </tr>
+      )}
     </>
   );
 }
 
 // ---- Group (sub-category) ------------------------------------------------
 
-function GroupEditor({ section, group, roles, certCatalog, driverLevels, members, onChange, onRemove, onAssign, onPromote }) {
+function GroupEditor({ section, group, roles, certCatalog, driverLevels, members, canEditStructure, onChange, onRemove, onAssign, onPromote }) {
   const [editingName, setEditingName] = useState(false);
   const [positionsInput, setPositionsInput] = useState(String((group.ranks || []).length));
 
@@ -367,11 +391,15 @@ function GroupEditor({ section, group, roles, certCatalog, driverLevels, members
         ) : (
           <strong style={{ flex: "1 1 160px" }}>{group.name || "(unlabeled group)"}</strong>
         )}
-        <button className="btn secondary" onClick={() => setEditingName(e => !e)}>{editingName ? "Done" : "Edit label"}</button>
-        <span className="muted" style={{ fontSize: 13 }}>Positions:</span>
-        <input style={{ width: 60 }} value={positionsInput} onChange={e => setPositionsInput(e.target.value)} onBlur={applyPositions} />
-        <button className="btn secondary" onClick={autoCallsigns}>Auto callsigns</button>
-        <button className="btn secondary" onClick={onRemove} title="Remove sub-category">✕</button>
+        {canEditStructure && (
+          <>
+            <button className="btn secondary" onClick={() => setEditingName(e => !e)}>{editingName ? "Done" : "Edit label"}</button>
+            <span className="muted" style={{ fontSize: 13 }}>Positions:</span>
+            <input style={{ width: 60 }} value={positionsInput} onChange={e => setPositionsInput(e.target.value)} onBlur={applyPositions} />
+            <button className="btn secondary" onClick={autoCallsigns}>Auto callsigns</button>
+            <button className="btn secondary" onClick={onRemove} title="Remove sub-category">✕</button>
+          </>
+        )}
       </div>
 
       {(group.ranks || []).length > 0 && (
@@ -399,6 +427,7 @@ function GroupEditor({ section, group, roles, certCatalog, driverLevels, members
                 certCatalog={certCatalog}
                 driverLevels={driverLevels}
                 members={members}
+                canEditStructure={canEditStructure}
                 onChange={u => updateRank(r.id, u)}
                 onRemove={() => removeRank(r.id)}
                 onAssign={onAssign}
@@ -408,14 +437,14 @@ function GroupEditor({ section, group, roles, certCatalog, driverLevels, members
           </tbody>
         </table>
       )}
-      <button className="btn secondary" onClick={addRank} style={{ marginTop: 8 }}>+ Add rank</button>
+      {canEditStructure && <button className="btn secondary" onClick={addRank} style={{ marginTop: 8 }}>+ Add rank</button>}
     </div>
   );
 }
 
 // ---- Section (category) --------------------------------------------------
 
-function SectionEditor({ section, roles, certCatalog, driverLevels, members, onChange, onRemove, onMoveUp, onMoveDown, onAssign, onPromote }) {
+function SectionEditor({ section, roles, certCatalog, driverLevels, members, canEditStructure, onChange, onRemove, onMoveUp, onMoveDown, onAssign, onPromote }) {
   const [editing, setEditing] = useState(false);
 
   function patch(fields) {
@@ -441,7 +470,7 @@ function SectionEditor({ section, roles, certCatalog, driverLevels, members, onC
   }
 
   return (
-    <div className="card" style={{ marginBottom: 16 }}>
+    <div id={`section-${section.id}`} className="card" style={{ marginBottom: 16, scrollMarginTop: 80 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 6 }}>
         <span style={{ width: 10, height: 10, borderRadius: 2, background: section.color || "#5fb4ff", flexShrink: 0 }} />
         {editing ? (
@@ -449,11 +478,15 @@ function SectionEditor({ section, roles, certCatalog, driverLevels, members, onC
         ) : (
           <h3 style={{ margin: 0, flex: "1 1 200px" }}>{section.name || "Untitled category"}</h3>
         )}
-        <button className="btn secondary" onClick={() => setEditing(e => !e)}>{editing ? "Done" : "Edit"}</button>
-        <input type="color" value={section.color || "#5fb4ff"} onChange={e => patch({ color: e.target.value })} style={{ width: 36, padding: 2 }} />
-        <button className="btn secondary" onClick={onMoveUp} title="Move up">▲</button>
-        <button className="btn secondary" onClick={onMoveDown} title="Move down">▼</button>
-        <button className="btn secondary" onClick={onRemove} title="Remove category">✕</button>
+        {canEditStructure && (
+          <>
+            <button className="btn secondary" onClick={() => setEditing(e => !e)}>{editing ? "Done" : "Edit"}</button>
+            <input type="color" value={section.color || "#5fb4ff"} onChange={e => patch({ color: e.target.value })} style={{ width: 36, padding: 2 }} />
+            <button className="btn secondary" onClick={onMoveUp} title="Move up">▲</button>
+            <button className="btn secondary" onClick={onMoveDown} title="Move down">▼</button>
+            <button className="btn secondary" onClick={onRemove} title="Remove category">✕</button>
+          </>
+        )}
       </div>
 
       {editing && (
@@ -474,20 +507,21 @@ function SectionEditor({ section, roles, certCatalog, driverLevels, members, onC
           certCatalog={certCatalog}
           driverLevels={driverLevels}
           members={members}
+          canEditStructure={canEditStructure}
           onChange={u => updateGroup(g.id, u)}
           onRemove={() => removeGroup(g.id)}
           onAssign={onAssign}
           onPromote={onPromote}
         />
       ))}
-      <button className="btn secondary" onClick={addGroup}>+ Add sub-category</button>
+      {canEditStructure && <button className="btn secondary" onClick={addGroup}>+ Add sub-category</button>}
     </div>
   );
 }
 
 // ---- Top level -------------------------------------------------------
 
-export default function RosterEditor({ guildId, sections, onChangeSections, onAssign, roles, certCatalog = [], driverLevels = DEFAULT_DRIVER_LEVELS }) {
+export default function RosterEditor({ guildId, sections, onChangeSections, onAssign, canEditStructure = true, roles, certCatalog = [], driverLevels = DEFAULT_DRIVER_LEVELS }) {
   const members = useGuildMembers(guildId);
   const [promoting, setPromoting] = useState(null);
 
@@ -553,6 +587,7 @@ export default function RosterEditor({ guildId, sections, onChangeSections, onAs
           certCatalog={certCatalog}
           driverLevels={driverLevels}
           members={members}
+          canEditStructure={canEditStructure}
           onChange={u => updateSection(s.id, u)}
           onRemove={() => removeSection(s.id)}
           onMoveUp={() => moveSection(s.id, -1)}
@@ -561,7 +596,7 @@ export default function RosterEditor({ guildId, sections, onChangeSections, onAs
           onPromote={setPromoting}
         />
       ))}
-      <button className="btn secondary" onClick={addSection}>+ Add category</button>
+      {canEditStructure && <button className="btn secondary" onClick={addSection}>+ Add category</button>}
 
       {promoting && (
         <PromoteModal

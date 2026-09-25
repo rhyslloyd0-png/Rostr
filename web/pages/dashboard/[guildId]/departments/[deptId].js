@@ -164,6 +164,22 @@ export default function DepartmentPage() {
   const canAdmin = tier === "admin";
   const { filled, total } = rosterStats(sections);
 
+  // Manager Panel and Admin Panel are separate views (matching Midnight
+  // Roster's roster.html?panel=manager / ?panel=admin — each its own page,
+  // not both stacked under the read-only roster), picked by the `panel`
+  // query param and clamped to what this person's tier actually allows.
+  const requestedPanel = router.query.panel;
+  const mode = requestedPanel === "admin" && canAdmin ? "admin"
+    : requestedPanel === "manager" && canManage ? "manager"
+    : "view";
+  const canEditStructure = mode === "admin";
+  const basePath = `/dashboard/${guildId}/departments/${deptId}`;
+
+  // In Manager mode there's no structural Save button (managers can't make
+  // structural edits at all), so every change — including cert ticks and
+  // driver-level picks — saves and syncs immediately, same as assignment.
+  const handleChangeSections = canEditStructure ? setSections : saveAndSyncNow;
+
   return (
     <>
       <AppHeader guildId={guildId} activeDeptSlug={deptId} homeHref={`/staff/${guildId}/${deptId}`} />
@@ -171,11 +187,11 @@ export default function DepartmentPage() {
         <DeptBanner guildId={guildId} department={department} filled={filled} total={total} />
 
         <div className="action-pills">
-          <a className="action-pill" href="#roster">View Roster</a>
+          <a className={`action-pill${mode === "view" ? " primary" : ""}`} href={basePath}>View Roster</a>
           {plan?.features?.sop && <a className="action-pill" href={`/sop/${guildId}/${deptId}`}>SOP Library</a>}
           {plan?.features?.loa && <a className="action-pill" href={`/loa/${guildId}/${deptId}`}>Leave Calendar</a>}
-          {canManage && <a className="action-pill manager-badge" href="#manager-panel">Manager Panel</a>}
-          {canAdmin && <a className="action-pill admin-badge" href="#admin-panel">Admin Panel</a>}
+          {canManage && <a className={`action-pill manager-badge${mode === "manager" ? " active" : ""}`} href={`${basePath}?panel=manager`}>Manager Panel</a>}
+          {canAdmin && <a className={`action-pill admin-badge${mode === "admin" ? " active" : ""}`} href={`${basePath}?panel=admin`}>Admin Panel</a>}
         </div>
 
         {sections.length > 0 && (
@@ -188,31 +204,49 @@ export default function DepartmentPage() {
           </div>
         )}
 
+        {mode === "admin" && (
+          <AdminPanel
+            guildId={guildId}
+            deptId={deptId}
+            department={department}
+            roles={roles}
+            sections={sections}
+            plan={plan}
+            certCatalog={certCatalog}
+            onCertCatalogChange={setCertCatalog}
+            driverLevels={driverLevels}
+            onDriverLevelsChange={setDriverLevels}
+            onSaved={load}
+          />
+        )}
+
+        {status && <div className="card" style={{ borderColor: status.type === "error" ? "#f28b82" : undefined }}>{status.message}</div>}
+
         <h2 id="roster">Roster</h2>
-        <RosterTable sections={sections} />
-
-        {canManage && (
+        {mode === "view" ? (
+          <RosterTable sections={sections} />
+        ) : (
           <>
-            <h2 id="manager-panel" style={{ marginTop: 32, scrollMarginTop: 80 }}>Manager Panel</h2>
-            {status && <div className="card" style={{ borderColor: status.type === "error" ? "#f28b82" : undefined }}>{status.message}</div>}
-
             <RosterEditor
               guildId={guildId}
               deptId={deptId}
               sections={sections}
-              onChangeSections={setSections}
+              onChangeSections={handleChangeSections}
               onAssign={saveAndSyncNow}
+              canEditStructure={canEditStructure}
               roles={roles}
               certCatalog={certCatalog}
               driverLevels={driverLevels}
             />
 
-            <div style={{ display: "flex", gap: 10, margin: "12px 0 24px" }}>
-              <button className="btn" disabled={saving} onClick={saveRoster}>{saving ? "Saving..." : "Save roster"}</button>
-              <button className="btn secondary" disabled={syncing} onClick={sync}>
-                {syncing ? "Syncing..." : "Sync Discord roles"}
-              </button>
-            </div>
+            {canEditStructure && (
+              <div style={{ display: "flex", gap: 10, margin: "12px 0 24px" }}>
+                <button className="btn" disabled={saving} onClick={saveRoster}>{saving ? "Saving..." : "Save roster"}</button>
+                <button className="btn secondary" disabled={syncing} onClick={sync}>
+                  {syncing ? "Syncing..." : "Sync Discord roles"}
+                </button>
+              </div>
+            )}
 
             {plan?.features?.applications ? (
               <ApplicationsPanel guildId={guildId} deptId={deptId} showQuestionEditor={false} />
@@ -227,25 +261,6 @@ export default function DepartmentPage() {
                 <div className="card"><p className="muted">Leave of absence isn't available on the {plan?.key} plan.</p></div>
               )}
             </div>
-          </>
-        )}
-
-        {canAdmin && (
-          <>
-            <h2 id="admin-panel" style={{ marginTop: 32, scrollMarginTop: 80 }}>Admin Panel</h2>
-            <AdminPanel
-              guildId={guildId}
-              deptId={deptId}
-              department={department}
-              roles={roles}
-              sections={sections}
-              plan={plan}
-              certCatalog={certCatalog}
-              onCertCatalogChange={setCertCatalog}
-              driverLevels={driverLevels}
-              onDriverLevelsChange={setDriverLevels}
-              onSaved={load}
-            />
           </>
         )}
       </div>

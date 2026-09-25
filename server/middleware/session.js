@@ -1,5 +1,6 @@
 const crypto = require("crypto");
 const pool = require("../db/pool");
+const { encryptToken, decryptToken } = require("../lib/tokenCrypto");
 
 const SESSION_TTL_MS = 24 * 60 * 60 * 1000; // 24h
 const COOKIE_NAME = "rostr_session";
@@ -15,7 +16,7 @@ async function createSession(discordUser, discordToken) {
   await pool.query(
     `INSERT INTO sessions (token, discord_user_id, discord_username, discord_avatar, expires_at, access_token, refresh_token, token_expires_at)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-    [token, discordUser.id, discordUser.username, discordUser.avatar, expiresAt, discordToken?.access_token || null, discordToken?.refresh_token || null, tokenExpiresAt]
+    [token, discordUser.id, discordUser.username, discordUser.avatar, expiresAt, encryptToken(discordToken?.access_token), encryptToken(discordToken?.refresh_token), tokenExpiresAt]
   );
   return { token, expiresAt };
 }
@@ -36,7 +37,7 @@ async function attachSession(req, res, next) {
       username: rows[0].discord_username,
       avatar: rows[0].discord_avatar,
     };
-    req.discordAccessToken = rows[0].access_token;
+    req.discordAccessToken = decryptToken(rows[0].access_token);
   }
   next();
 }

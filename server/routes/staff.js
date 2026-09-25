@@ -7,6 +7,7 @@ const pool = require("../db/pool");
 const { attachSession, requireAuth } = require("../middleware/session");
 const { requireDepartmentMember, computeTier } = require("../middleware/departmentAccess");
 const { getPlan } = require("../config/plans");
+const { getGuildMember } = require("../discord/api");
 
 const router = express.Router();
 router.use(attachSession, requireAuth);
@@ -54,8 +55,21 @@ router.get("/:guildId/:deptId", requireDepartmentMember, async (req, res) => {
     if (rows.length) loa = rows[0];
   }
 
+  let sopCount = null;
+  if (plan.features.sop) {
+    const { rows } = await pool.query("SELECT COUNT(*) FROM sop_files WHERE department_id = $1", [req.department.id]);
+    sopCount = Number(rows[0].count);
+  }
+
+  // Discord's account username (e.g. "rhyso014") isn't what people expect to
+  // be greeted by — prefer their nickname in this server, then their global
+  // display name, falling back to username only if neither is set.
+  const member = await getGuildMember(req.guild.id, req.user.id);
+  const displayName = member?.nick || member?.user?.global_name || req.user.username;
+
   res.json({
     user: req.user,
+    displayName,
     guild: { id: req.guild.id, name: req.guild.name, icon: req.guild.icon },
     department: {
       id: req.department.id, slug: req.department.slug, name: req.department.name,
@@ -65,6 +79,7 @@ router.get("/:guildId/:deptId", requireDepartmentMember, async (req, res) => {
     features: plan.features,
     currentPost,
     loa,
+    sopCount,
   });
 });
 

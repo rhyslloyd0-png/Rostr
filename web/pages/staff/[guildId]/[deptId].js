@@ -60,7 +60,7 @@ export default function StaffHome() {
     );
   }
 
-  const { user, guild, department, tier, features, currentPost, loa } = data;
+  const { user, displayName, guild, department, tier, features, currentPost, loa, sopCount } = data;
   const avatarUrl = user.avatar
     ? `https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.png`
     : "https://cdn.discordapp.com/embed/avatars/0.png";
@@ -94,7 +94,7 @@ export default function StaffHome() {
         <img className="staff-avatar" src={avatarUrl} alt="" />
         <div>
           <div className="eyebrow">{greeting()},</div>
-          <h2>{user.username}</h2>
+          <h2>{displayName}</h2>
           <div className="status">
             {currentPost ? `On the roster — ${currentPost.rank}${currentPost.section ? ` (${currentPost.section})` : ""}` : "Not on the roster yet"}
           </div>
@@ -128,6 +128,22 @@ export default function StaffHome() {
               </p>
             </div>
             <Link className="btn" href={`/loa/${guildId}/${department.slug}`}>Request leave</Link>
+          </div>
+        </>
+      )}
+
+      {features.sop && (
+        <>
+          <div className="section-label">
+            SOP documents
+            <Link href={`/sop/${guildId}/${department.slug}`}>Open the library ›</Link>
+          </div>
+          <div className="card record-card" style={{ marginBottom: 28 }}>
+            <div>
+              <h3 style={{ margin: 0 }}>{sopCount ? `${sopCount} document${sopCount === 1 ? "" : "s"}` : "No documents yet."}</h3>
+              <p className="muted" style={{ margin: "4px 0 0" }}>Standard operating procedures for this department.</p>
+            </div>
+            <Link className="btn" href={`/sop/${guildId}/${department.slug}`}>Browse documents</Link>
           </div>
         </>
       )}

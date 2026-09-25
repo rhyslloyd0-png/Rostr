@@ -24,6 +24,15 @@ function sanitizeFilename(name) {
   return String(name).replace(/[\x00-\x1f"]/g, "_");
 }
 
+// Department rows carry the banner image as bytea — strip it before a row
+// goes into a JSON response (it's served separately via /:deptId/banner)
+// so responses don't balloon with an embedded image every time.
+function stripBanner(dept) {
+  if (!dept) return dept;
+  const { banner_data, ...rest } = dept;
+  return { ...rest, has_banner: !!banner_data };
+}
+
 // ---- Guild-wide (creating/listing/removing departments): guild owner or a
 // guild-admin role only, not a department's own admin/manager role — see
 // middleware/departmentAccess.js for the per-department tiers below.
@@ -33,7 +42,7 @@ router.get("/", requireGuildAccess, async (req, res) => {
     "SELECT * FROM departments WHERE guild_id = $1 ORDER BY position, created_at",
     [req.guild.id]
   );
-  res.json({ departments: rows });
+  res.json({ departments: rows.map(stripBanner) });
 });
 
 router.post("/", requireGuildAccess, async (req, res) => {
@@ -51,7 +60,7 @@ router.post("/", requireGuildAccess, async (req, res) => {
      VALUES ($1, $2, $3, $4, $5) RETURNING *`,
     [req.guild.id, name, slug, accessRoleId || null, staffRoleId || null]
   );
-  res.status(201).json({ department: rows[0] });
+  res.status(201).json({ department: stripBanner(rows[0]) });
 });
 
 router.delete("/:deptId", requireGuildAccess, async (req, res) => {
@@ -68,11 +77,11 @@ router.delete("/:deptId", requireGuildAccess, async (req, res) => {
 
 router.get("/:deptId", requireDepartmentMember, async (req, res) => {
   const tier = await computeTier(req);
-  res.json({ department: req.department, tier });
+  res.json({ department: stripBanner(req.department), tier });
 });
 
 const EDITABLE_FIELDS = [
-  "name", "access_role_id", "admin_role_ids", "manager_role_ids",
+  "name", "color", "access_role_id", "admin_role_ids", "manager_role_ids",
   "staff_role_id", "applicant_role_id", "loa_role_id", "applications_channel_id", "position",
 ];
 
@@ -86,7 +95,38 @@ router.patch("/:deptId", requireDepartmentAdmin, async (req, res) => {
     `UPDATE departments SET ${setClause} WHERE id = $1 AND guild_id = $2 RETURNING *`,
     [req.params.deptId, req.guild.id, ...values]
   );
-  res.json({ department: rows[0] });
+  res.json({ department: stripBanner(rows[0]) });
+});
+
+// Banner image — admin uploads/removes it, any department member can view
+// it (served separately from the department JSON so a normal page load
+// doesn't have to pull the image bytes every time).
+router.post("/:deptId/banner", requireDepartmentAdmin, upload.single("file"), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: "file is required" });
+  await pool.query(
+    "UPDATE departments SET banner_data = $1, banner_content_type = $2 WHERE id = $3",
+    [req.file.buffer, req.file.mimetype, req.department.id]
+  );
+  res.status(201).json({ ok: true });
+});
+
+router.delete("/:deptId/banner", requireDepartmentAdmin, async (req, res) => {
+  await pool.query(
+    "UPDATE departments SET banner_data = NULL, banner_content_type = NULL WHERE id = $1",
+    [req.department.id]
+  );
+  res.status(204).end();
+});
+
+router.get("/:deptId/banner", requireDepartmentMember, async (req, res) => {
+  const { rows } = await pool.query(
+    "SELECT banner_data, banner_content_type FROM departments WHERE id = $1",
+    [req.department.id]
+  );
+  if (!rows.length || !rows[0].banner_data) return res.status(404).json({ error: "No banner set" });
+  res.set("Content-Type", rows[0].banner_content_type);
+  res.set("Cache-Control", "private, max-age=300");
+  res.send(rows[0].banner_data);
 });
 
 // Roster/questions/role-map JSON blobs — GET returns {} if unset yet.

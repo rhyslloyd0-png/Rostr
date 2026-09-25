@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
 import Link from "next/link";
 import { apiFetch, loginUrl } from "../../../lib/api";
+import AppHeader from "../../../components/AppHeader";
 
 function greeting() {
   const hour = new Date().getHours();
@@ -30,17 +31,34 @@ export default function StaffHome() {
 
   if (needsLogin) {
     return (
-      <div className="container">
-        <div className="card">
-          <p>Sign in with Discord to see your record.</p>
-          <a className="btn" href={loginUrl({ mode: "identify", returnTo: `/staff/${guildId}/${deptId}` })}>Sign in with Discord</a>
+      <>
+        <AppHeader guildId={guildId} activeDeptSlug={deptId} />
+        <div className="container">
+          <div className="card">
+            <p>Sign in with Discord to see your record.</p>
+            <a className="btn" href={loginUrl({ mode: "identify", returnTo: `/staff/${guildId}/${deptId}` })}>Sign in with Discord</a>
+          </div>
         </div>
-      </div>
+      </>
     );
   }
 
-  if (error) return <div className="container"><div className="card error">{error.body?.message || error.message}</div></div>;
-  if (!data) return <div className="container"><p className="muted">Loading...</p></div>;
+  if (error) {
+    return (
+      <>
+        <AppHeader guildId={guildId} activeDeptSlug={deptId} />
+        <div className="container"><div className="card error">{error.body?.message || error.message}</div></div>
+      </>
+    );
+  }
+  if (!data) {
+    return (
+      <>
+        <AppHeader guildId={guildId} activeDeptSlug={deptId} />
+        <div className="container"><p className="muted">Loading...</p></div>
+      </>
+    );
+  }
 
   const { user, guild, department, tier, features, currentPost, loa } = data;
   const avatarUrl = user.avatar
@@ -51,12 +69,14 @@ export default function StaffHome() {
     : "/brand/app-icon.png";
 
   return (
-    <div className="container">
+    <>
+      <AppHeader guildId={guildId} activeDeptSlug={deptId} />
+      <div className="container">
       <div className="staff-header">
         <div className="staff-header-title">
           <img src={guildIconUrl} alt="" />
           <div>
-            <h1>{department.name}</h1>
+            <h1 style={{ color: department.color || undefined }}>{department.name}</h1>
             <p className="muted">{guild.name}</p>
           </div>
         </div>
@@ -131,6 +151,7 @@ export default function StaffHome() {
           </Link>
         )}
       </div>
-    </div>
+      </div>
+    </>
   );
 }

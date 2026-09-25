@@ -174,6 +174,87 @@ label { display: block; font-size: 13px; margin-bottom: 6px; color: #a5abba; }
 .footer .links { margin-top: 10px; display: flex; gap: 16px; justify-content: center; }
 .footer .links a:hover { color: #c4c8d4; }
 
+/* Sticky app header */
+.app-header {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: #101318;
+  border-bottom: 1px solid #262b36;
+}
+.app-header-inner {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 10px 20px;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+.app-header-brand { display: flex; align-items: center; gap: 8px; font-weight: 700; letter-spacing: 0.5px; flex-shrink: 0; }
+.app-header-depts { display: flex; gap: 8px; flex-wrap: wrap; flex: 1; }
+.dept-pill {
+  border: 1px solid #333947;
+  border-radius: 999px;
+  padding: 4px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.app-header-account { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+.app-header-avatar { width: 28px; height: 28px; border-radius: 50%; }
+.icon-btn {
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #333947;
+  border-radius: 8px;
+  background: #171a21;
+  color: #c4c8d4;
+  cursor: pointer;
+  font-size: 15px;
+}
+.action-pills { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 20px; }
+.action-pill {
+  border-radius: 999px;
+  padding: 8px 18px;
+  font-weight: 600;
+  font-size: 13px;
+  border: 1px solid #333947;
+  background: #171a21;
+  color: #c4c8d4;
+}
+.action-pill.primary { background: var(--brand-blue); color: white; border-color: var(--brand-blue); }
+.section-jump { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 24px; }
+
+/* Department banner */
+.dept-banner {
+  position: relative;
+  border-radius: 12px;
+  overflow: hidden;
+  margin-bottom: 20px;
+  border: 1px solid #262b36;
+  min-height: 110px;
+  display: flex;
+  align-items: center;
+  padding: 0 24px;
+  background-size: cover;
+  background-position: center;
+  background-color: #12141a;
+}
+.dept-banner::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, rgba(10,12,16,0.85), rgba(10,12,16,0.5));
+}
+.dept-banner-content { position: relative; display: flex; align-items: center; justify-content: space-between; width: 100%; flex-wrap: wrap; gap: 12px; }
+.dept-banner-title { display: flex; align-items: center; gap: 14px; }
+.dept-banner-title img { width: 48px; height: 48px; border-radius: 10px; }
+.dept-banner-title h1 { margin: 0; font-size: 26px; }
+.dept-banner-stats { display: flex; gap: 16px; font-size: 14px; }
+
 /* Staff landing page */
 .staff-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; flex-wrap: wrap; gap: 12px; }
 .staff-header-title { display: flex; align-items: center; gap: 16px; }

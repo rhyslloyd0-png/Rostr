@@ -5,7 +5,7 @@ function Section({ section }) {
   const ranks = section.ranks || [];
 
   return (
-    <div style={{ marginBottom: 24 }}>
+    <div id={`section-${section.id}`} style={{ marginBottom: 24, scrollMarginTop: 80 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }} onClick={() => setOpen(o => !o)}>
         <span style={{ transform: open ? "rotate(0deg)" : "rotate(-90deg)", display: "inline-block", transition: "transform 0.15s" }}>▾</span>
         <span style={{ width: 8, height: 8, borderRadius: "50%", background: section.color || "#5fb4ff", display: "inline-block" }} />
@@ -51,19 +51,14 @@ function Section({ section }) {
   );
 }
 
-export default function RosterTable({ sections }) {
+export function rosterStats(sections) {
   const allRanks = sections.flatMap(s => s.ranks || []);
-  const filled = allRanks.filter(r => r.userId).length;
-  const total = allRanks.length;
+  return { filled: allRanks.filter(r => r.userId).length, total: allRanks.length };
+}
 
+export default function RosterTable({ sections }) {
   return (
     <div>
-      <div className="card" style={{ display: "flex", gap: 20 }}>
-        <div><strong>{filled}</strong> <span className="muted">filled</span></div>
-        <div><strong>{total - filled}</strong> <span className="muted">vacant</span></div>
-        <div><strong>{total}</strong> <span className="muted">total</span></div>
-      </div>
-
       {sections.length === 0 && <p className="muted">No roster structure set up yet.</p>}
       {sections.map(s => <Section key={s.id} section={s} />)}
     </div>

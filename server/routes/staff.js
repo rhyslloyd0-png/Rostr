@@ -11,6 +11,19 @@ const { getPlan } = require("../config/plans");
 const router = express.Router();
 router.use(attachSession, requireAuth);
 
+// Department names/colors for the nav switcher — not sensitive, so listed
+// for any logged-in user regardless of which departments they personally
+// have access to (matching each one still enforces its own tier).
+router.get("/:guildId/departments", async (req, res) => {
+  const { rows: guildRows } = await pool.query("SELECT id FROM guilds WHERE id = $1 OR slug = $1", [req.params.guildId]);
+  if (!guildRows.length) return res.status(404).json({ error: "Server not found" });
+  const { rows } = await pool.query(
+    "SELECT slug, name, color FROM departments WHERE guild_id = $1 ORDER BY position, created_at",
+    [guildRows[0].id]
+  );
+  res.json({ departments: rows });
+});
+
 router.get("/:guildId/:deptId", requireDepartmentMember, async (req, res) => {
   const tier = await computeTier(req);
   const plan = await getPlan(req.guild.plan);
@@ -44,7 +57,10 @@ router.get("/:guildId/:deptId", requireDepartmentMember, async (req, res) => {
   res.json({
     user: req.user,
     guild: { id: req.guild.id, name: req.guild.name, icon: req.guild.icon },
-    department: { id: req.department.id, slug: req.department.slug, name: req.department.name },
+    department: {
+      id: req.department.id, slug: req.department.slug, name: req.department.name,
+      color: req.department.color, hasBanner: !!req.department.banner_data,
+    },
     tier,
     features: plan.features,
     currentPost,

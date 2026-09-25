@@ -1,7 +1,24 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/router";
+import Link from "next/link";
 import { apiFetch } from "../../../../lib/api";
-import RosterTable from "../../../../components/RosterTable";
+
+// Raw fetch for multipart uploads — apiFetch always JSON-stringifies the
+// body and forces Content-Type: application/json, which breaks FormData
+// (needs the browser to set its own multipart boundary header).
+async function apiFetchRaw(path, options = {}) {
+  const resp = await fetch(`/api${path}`, { ...options, credentials: "include" });
+  if (!resp.ok) {
+    const data = await resp.json().catch(() => ({}));
+    const err = new Error(data.message || data.error || `Request failed (${resp.status})`);
+    err.status = resp.status;
+    throw err;
+  }
+  return resp.status === 204 ? null : resp.json();
+}
+import AppHeader from "../../../../components/AppHeader";
+import DeptBanner from "../../../../components/DeptBanner";
+import RosterTable, { rosterStats } from "../../../../components/RosterTable";
 import RosterEditor from "../../../../components/RosterEditor";
 import RolePicker from "../../../../components/RolePicker";
 import ApplicationsPanel from "../../../../components/ApplicationsPanel";
@@ -13,28 +30,98 @@ import SopPanel from "../../../../components/SopPanel";
 // `{ sections: [{ ranks: [...] }] }` shape, so roster data saved before this
 // redesign doesn't just disappear.
 function normalizeRoster(value) {
-  if (value.sections) return value.sections;
+  const certCatalog = value.certCatalog || [];
+  if (value.sections) return { sections: value.sections, certCatalog };
   if (value.slots?.length) {
-    return [{
-      id: "migrated-staff",
-      name: "Staff",
-      ranks: value.slots.map(s => ({
-        id: s.id,
-        rank: s.title || "",
-        userId: s.userId || "",
-        discordUsername: "",
-        name: s.displayName || "",
-        certifications: [],
-        roleIds: [],
-      })),
-    }];
+    return {
+      certCatalog,
+      sections: [{
+        id: "migrated-staff",
+        name: "Staff",
+        ranks: value.slots.map(s => ({
+          id: s.id,
+          rank: s.title || "",
+          userId: s.userId || "",
+          discordUsername: "",
+          name: s.displayName || "",
+          certifications: [],
+          roleIds: [],
+        })),
+      }],
+    };
   }
-  return [];
+  return { sections: [], certCatalog };
 }
 
-function AdminSettings({ guildId, deptId, department, roles, onSaved }) {
+function CertCatalogEditor({ certCatalog, onChange }) {
+  const [draft, setDraft] = useState("");
+
+  function add() {
+    const value = draft.trim().toUpperCase();
+    if (value && !certCatalog.includes(value)) onChange([...certCatalog, value]);
+    setDraft("");
+  }
+
+  return (
+    <div className="field">
+      <label>Certification catalog (the pills managers can toggle per rank)</label>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
+        {certCatalog.map(c => (
+          <span key={c} className="tag" style={{ display: "flex", alignItems: "center", gap: 4 }}>
+            {c}
+            <a href="#" onClick={e => { e.preventDefault(); onChange(certCatalog.filter(x => x !== c)); }} style={{ color: "#f28b82" }}>✕</a>
+          </span>
+        ))}
+      </div>
+      <div style={{ display: "flex", gap: 8 }}>
+        <input value={draft} onChange={e => setDraft(e.target.value)} placeholder="e.g. SORT" onKeyDown={e => e.key === "Enter" && (e.preventDefault(), add())} />
+        <button className="btn secondary" onClick={add}>Add</button>
+      </div>
+    </div>
+  );
+}
+
+function BannerUpload({ guildId, deptId, hasBanner, onSaved }) {
+  const [uploading, setUploading] = useState(false);
+  const fileInput = useRef(null);
+
+  async function upload(e) {
+    e.preventDefault();
+    const file = fileInput.current.files[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      await apiFetchRaw(`/guilds/${guildId}/departments/${deptId}/banner`, { method: "POST", body: form });
+      fileInput.current.value = "";
+      onSaved();
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  async function remove() {
+    await apiFetchRaw(`/guilds/${guildId}/departments/${deptId}/banner`, { method: "DELETE" });
+    onSaved();
+  }
+
+  return (
+    <div className="field">
+      <label>Banner image</label>
+      <form onSubmit={upload} style={{ display: "flex", gap: 8, alignItems: "center" }}>
+        <input type="file" accept="image/*" ref={fileInput} />
+        <button className="btn secondary" type="submit" disabled={uploading}>{uploading ? "Uploading..." : "Upload"}</button>
+        {hasBanner && <button className="btn secondary" type="button" onClick={remove}>Remove</button>}
+      </form>
+    </div>
+  );
+}
+
+function AdminSettings({ guildId, deptId, department, roles, certCatalog, onCertCatalogChange, onSaved }) {
   const [form, setForm] = useState({
     name: department.name,
+    color: department.color || "#5fb4ff",
     access_role_id: department.access_role_id || "",
     staff_role_id: department.staff_role_id || "",
     applicant_role_id: department.applicant_role_id || "",
@@ -77,6 +164,13 @@ function AdminSettings({ guildId, deptId, department, roles, onSaved }) {
         <label>Department name</label>
         <input value={form.name} onChange={e => set("name", e.target.value)} />
       </div>
+      <div className="field">
+        <label>Accent color</label>
+        <input type="color" value={form.color} onChange={e => set("color", e.target.value)} style={{ width: 60 }} />
+      </div>
+      <BannerUpload guildId={guildId} deptId={deptId} hasBanner={department.has_banner} onSaved={onSaved} />
+      <CertCatalogEditor certCatalog={certCatalog} onChange={onCertCatalogChange} />
+
       {roleSelect("Access role", "access_role_id")}
       {roleSelect("Staff role", "staff_role_id")}
       {roleSelect("Applicant role", "applicant_role_id")}
@@ -106,6 +200,7 @@ export default function DepartmentPage() {
   const [plan, setPlan] = useState(null);
   const [roles, setRoles] = useState(null);
   const [sections, setSections] = useState(null);
+  const [certCatalog, setCertCatalog] = useState([]);
   const [error, setError] = useState(null);
   const [status, setStatus] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -122,7 +217,9 @@ export default function DepartmentPage() {
       .then(([deptData, rosterData, guildData, roleData]) => {
         setDepartment(deptData.department);
         setTier(deptData.tier);
-        setSections(normalizeRoster(rosterData.value));
+        const normalized = normalizeRoster(rosterData.value);
+        setSections(normalized.sections);
+        setCertCatalog(normalized.certCatalog);
         setPlan(guildData.plan);
         setRoles(roleData.roles);
       })
@@ -137,7 +234,7 @@ export default function DepartmentPage() {
     try {
       await apiFetch(`/guilds/${guildId}/departments/${deptId}/data/roster`, {
         method: "PUT",
-        body: { value: { sections } },
+        body: { value: { sections, certCatalog } },
       });
       setStatus({ type: "ok", message: "Roster saved." });
     } catch (err) {
@@ -169,58 +266,88 @@ export default function DepartmentPage() {
 
   const canManage = tier === "manage" || tier === "admin";
   const canAdmin = tier === "admin";
+  const { filled, total } = rosterStats(sections);
 
   return (
-    <div className="container">
-      <h1>{department.name}</h1>
+    <>
+      <AppHeader guildId={guildId} activeDeptSlug={deptId} homeHref={`/staff/${guildId}/${deptId}`} />
+      <div className="container">
+        <DeptBanner guildId={guildId} department={department} filled={filled} total={total} />
 
-      <h2>Roster</h2>
-      <RosterTable sections={sections} />
+        <div className="action-pills">
+          <a className="action-pill" href="#roster">View Roster</a>
+          {plan?.features?.sop && <a className="action-pill" href={`/sop/${guildId}/${deptId}`}>SOP Library</a>}
+          {plan?.features?.loa && <a className="action-pill" href={`/loa/${guildId}/${deptId}`}>Leave Calendar</a>}
+          {canManage && <a className="action-pill primary" href="#manager-panel">Manager Panel</a>}
+          {canAdmin && <a className="action-pill primary" href="#admin-panel">Admin Panel</a>}
+        </div>
 
-      {canManage && (
-        <>
-          <h2 style={{ marginTop: 32 }}>Manager Panel</h2>
-          {status && <div className="card" style={{ borderColor: status.type === "error" ? "#f28b82" : undefined }}>{status.message}</div>}
-
-          <RosterEditor guildId={guildId} sections={sections} onChangeSections={setSections} roles={roles} />
-
-          <div style={{ display: "flex", gap: 10, margin: "12px 0 24px" }}>
-            <button className="btn" disabled={saving} onClick={saveRoster}>{saving ? "Saving..." : "Save roster"}</button>
-            <button className="btn secondary" disabled={syncing} onClick={sync}>
-              {syncing ? "Syncing..." : "Sync Discord roles"}
-            </button>
+        {sections.length > 0 && (
+          <div className="section-jump">
+            {sections.map(s => (
+              <a key={s.id} className="dept-pill" style={{ borderColor: s.color || "#333947", color: s.color || "#c4c8d4" }} href={`#section-${s.id}`}>
+                {s.name}
+              </a>
+            ))}
           </div>
+        )}
 
-          {plan?.features?.applications ? (
-            <ApplicationsPanel guildId={guildId} deptId={deptId} showQuestionEditor={canAdmin} />
-          ) : (
-            <div className="card"><p className="muted">Applications aren't available on the {plan?.key} plan.</p></div>
-          )}
+        <h2 id="roster">Roster</h2>
+        <RosterTable sections={sections} />
 
-          <div style={{ marginTop: 24 }}>
-            {plan?.features?.loa ? (
-              <LoaPanel guildId={guildId} deptId={deptId} />
+        {canManage && (
+          <>
+            <h2 id="manager-panel" style={{ marginTop: 32, scrollMarginTop: 80 }}>Manager Panel</h2>
+            {status && <div className="card" style={{ borderColor: status.type === "error" ? "#f28b82" : undefined }}>{status.message}</div>}
+
+            <RosterEditor guildId={guildId} sections={sections} onChangeSections={setSections} roles={roles} certCatalog={certCatalog} />
+
+            <div style={{ display: "flex", gap: 10, margin: "12px 0 24px" }}>
+              <button className="btn" disabled={saving} onClick={saveRoster}>{saving ? "Saving..." : "Save roster"}</button>
+              <button className="btn secondary" disabled={syncing} onClick={sync}>
+                {syncing ? "Syncing..." : "Sync Discord roles"}
+              </button>
+            </div>
+
+            {plan?.features?.applications ? (
+              <ApplicationsPanel guildId={guildId} deptId={deptId} showQuestionEditor={canAdmin} />
             ) : (
-              <div className="card"><p className="muted">Leave of absence isn't available on the {plan?.key} plan.</p></div>
+              <div className="card"><p className="muted">Applications aren't available on the {plan?.key} plan.</p></div>
             )}
-          </div>
-        </>
-      )}
 
-      {canAdmin && (
-        <>
-          <h2 style={{ marginTop: 32 }}>Admin Panel</h2>
-          <AdminSettings guildId={guildId} deptId={deptId} department={department} roles={roles} onSaved={load} />
+            <div style={{ marginTop: 24 }}>
+              {plan?.features?.loa ? (
+                <LoaPanel guildId={guildId} deptId={deptId} />
+              ) : (
+                <div className="card"><p className="muted">Leave of absence isn't available on the {plan?.key} plan.</p></div>
+              )}
+            </div>
+          </>
+        )}
 
-          <div style={{ marginTop: 24 }}>
-            {plan?.features?.sop ? (
-              <SopPanel guildId={guildId} deptId={deptId} />
-            ) : (
-              <div className="card"><p className="muted">The SOP library isn't available on the {plan?.key} plan.</p></div>
-            )}
-          </div>
-        </>
-      )}
-    </div>
+        {canAdmin && (
+          <>
+            <h2 id="admin-panel" style={{ marginTop: 32, scrollMarginTop: 80 }}>Admin Panel</h2>
+            <AdminSettings
+              guildId={guildId}
+              deptId={deptId}
+              department={department}
+              roles={roles}
+              certCatalog={certCatalog}
+              onCertCatalogChange={setCertCatalog}
+              onSaved={load}
+            />
+
+            <div style={{ marginTop: 24 }}>
+              {plan?.features?.sop ? (
+                <SopPanel guildId={guildId} deptId={deptId} />
+              ) : (
+                <div className="card"><p className="muted">The SOP library isn't available on the {plan?.key} plan.</p></div>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+    </>
   );
 }

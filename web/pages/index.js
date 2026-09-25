@@ -81,13 +81,6 @@ export default function Home() {
       </nav>
 
       <div className="hero">
-        <div className="hero-float hero-float-left">
-          <span className="dot dot-green" /> Role sync active
-        </div>
-        <div className="hero-float hero-float-right">
-          <span className="dot dot-blue" /> 3 departments online
-        </div>
-
         <img src="/brand/logo-main.png" alt="RostR" style={{ width: 120, height: "auto" }} />
         <h1>
           Roster management,<br />

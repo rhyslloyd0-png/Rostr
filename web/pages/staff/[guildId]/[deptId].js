@@ -55,7 +55,7 @@ export default function StaffHome() {
     return (
       <>
         <AppHeader guildId={guildId} activeDeptSlug={deptId} />
-        <div className="container"><p className="muted">Loading...</p></div>
+        <div className="container"><div className="page-loading"><span className="spinner" /> Loading…</div></div>
       </>
     );
   }

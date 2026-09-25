@@ -96,7 +96,7 @@ export default function DashboardHome() {
       <AppHeader />
       <div className="container wide">
         <h1>Your Rosters</h1>
-        {!rosters && <p className="muted">Loading...</p>}
+        {!rosters && <div className="page-loading"><span className="spinner" /> Loading…</div>}
         {rosters && rosters.length === 0 && <p className="muted">You don't hold a post on any roster yet.</p>}
         {rosters && rosters.length > 0 && (
           <div className="server-grid">
@@ -129,7 +129,7 @@ export default function DashboardHome() {
           </div>
         )}
 
-        {!servers && !needsReauth && <p className="muted" style={{ marginTop: 16 }}>Loading...</p>}
+        {!servers && !needsReauth && <div className="page-loading"><span className="spinner" /> Loading…</div>}
         {servers && servers.length === 0 && !needsReauth && (
           <p className="muted" style={{ marginTop: 16 }}>No servers found where you're the owner or an administrator.</p>
         )}

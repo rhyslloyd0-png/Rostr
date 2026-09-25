@@ -37,7 +37,7 @@ export default function ApplyGuildHome() {
   }
 
   if (error) return <><AppHeader guildId={guildId} /><div className="container"><div className="card error">{error.message}</div></div></>;
-  if (!data) return <><AppHeader guildId={guildId} /><div className="container"><p className="muted">Loading...</p></div></>;
+  if (!data) return <><AppHeader guildId={guildId} /><div className="container"><div className="page-loading"><span className="spinner" /> Loading…</div></div></>;
 
   return (
     <>

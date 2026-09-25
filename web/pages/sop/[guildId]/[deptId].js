@@ -53,7 +53,7 @@ export default function SopLibrary() {
   }
 
   if (error) return <><AppHeader guildId={guildId} activeDeptSlug={deptId} /><div className="container"><div className="card error">{error.body?.message || error.message}</div></div></>;
-  if (!department || !files) return <><AppHeader guildId={guildId} activeDeptSlug={deptId} /><div className="container"><p className="muted">Loading...</p></div></>;
+  if (!department || !files) return <><AppHeader guildId={guildId} activeDeptSlug={deptId} /><div className="container"><div className="page-loading"><span className="spinner" /> Loading…</div></div></>;
 
   const selected = files.find(f => f.id === selectedId) || null;
   const canView = selected && selected.content_type === "text/html";

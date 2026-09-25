@@ -133,7 +133,7 @@ export default function RequestLoa() {
   }
 
   if (error) return <><AppHeader guildId={guildId} activeDeptSlug={deptId} /><div className="container"><div className="card error">{error.body?.message || error.message}</div></div></>;
-  if (!department || !requests || !deptRequests) return <><AppHeader guildId={guildId} activeDeptSlug={deptId} /><div className="container"><p className="muted">Loading...</p></div></>;
+  if (!department || !requests || !deptRequests) return <><AppHeader guildId={guildId} activeDeptSlug={deptId} /><div className="container"><div className="page-loading"><span className="spinner" /> Loading…</div></div></>;
 
   const cells = buildMonthCells(viewYear, viewMonth);
   const isCurrentMonth = viewYear === today.getFullYear() && viewMonth === today.getMonth();

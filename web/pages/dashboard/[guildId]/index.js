@@ -49,7 +49,7 @@ export default function GuildDashboard() {
   }
 
   if (error) return <><AppHeader guildId={guildId} /><div className="container"><div className="card error">{error.message}</div></div></>;
-  if (!info || !departments) return <><AppHeader guildId={guildId} /><div className="container"><p className="muted">Loading...</p></div></>;
+  if (!info || !departments) return <><AppHeader guildId={guildId} /><div className="container"><div className="page-loading"><span className="spinner" /> Loading…</div></div></>;
 
   const atLimit = info.plan.max_departments !== -1 && info.departmentCount >= info.plan.max_departments;
 

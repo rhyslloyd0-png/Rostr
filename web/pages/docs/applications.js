@@ -26,6 +26,13 @@ export default function ApplicationsDoc() {
         Approve or deny from the department's Applications panel, optionally with feedback the applicant will see.
         Approving swaps roles automatically: the applicant role comes off, the department's staff role goes on.
       </p>
+
+      <h2>Approval placement</h2>
+      <p>
+        In the Admin Panel, <strong>Approval placement</strong> picks a category and rank that approved applicants are
+        seated into automatically — the first empty post at that rank, or a new one if they're all taken. Leave it
+        unset to only swap roles and seat people on the roster by hand.
+      </p>
     </DocsLayout>
   );
 }

@@ -1,14 +1,17 @@
 import Head from "next/head";
 import DocsLayout from "../../components/DocsLayout";
 
+const SUPPORT_URL = "https://discord.gg/y829Xsn5n";
+
 export default function TermsDoc() {
   return (
     <DocsLayout>
       <Head><title>Terms of Service — RostR Docs</title></Head>
       <h1>Terms of Service</h1>
       <p className="updated">
-        Last updated: [date]. This is a starting template, not legal advice — have it reviewed before relying on it, and
-        fill in the bracketed placeholders ([operator name], [contact email], [jurisdiction]) with your real details.
+        Last updated: 25 September 2026. This is a starting template, not legal advice — have it reviewed before
+        relying on it, and fill in the remaining bracketed placeholders ([operator name], liability cap, governing law)
+        with your real details.
       </p>
 
       <h2>1. Who this covers</h2>
@@ -65,8 +68,11 @@ export default function TermsDoc() {
       <h2>9. Changes to these terms</h2>
       <p>We may update these terms; continued use after a change means you accept the updated terms.</p>
 
-      <h2>10. Contact</h2>
-      <p>Questions about these terms: [contact email].</p>
+      <h2>10. Governing law</h2>
+      <p>These terms are governed by the laws of [jurisdiction].</p>
+
+      <h2>11. Contact</h2>
+      <p>Questions about these terms: <a href={SUPPORT_URL}>our support Discord</a>.</p>
     </DocsLayout>
   );
 }

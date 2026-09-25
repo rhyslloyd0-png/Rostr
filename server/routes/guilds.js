@@ -4,6 +4,9 @@ const { attachSession, requireAuth } = require("../middleware/session");
 const { requireGuildAccess } = require("../middleware/guildAccess");
 const { getPlan } = require("../config/plans");
 const { getGuildRoles, getGuildChannels, searchGuildMembers, getAllGuildMembers } = require("../discord/api");
+const { getUserGuilds } = require("../discord/oauth");
+
+const ADMINISTRATOR = 0x8;
 
 const router = express.Router();
 router.use(attachSession, requireAuth);
@@ -16,6 +19,87 @@ router.use(attachSession, requireAuth);
 router.get("/", async (req, res) => {
   const { rows } = await pool.query("SELECT * FROM guilds WHERE owner_discord_id = $1 ORDER BY name", [req.user.id]);
   res.json({ guilds: rows });
+});
+
+// Every Discord server this person owns or administers — live from
+// Discord's users/@me/guilds, not just the ones already in our `guilds`
+// table, so the dashboard can offer "Install RostR" on a server that
+// hasn't got it yet instead of only ever showing servers we already know
+// about. Requires the `guilds` OAuth scope, which the bot-install login
+// mode requests but the identify-only mode doesn't — a session from that
+// lighter flow just gets an empty list back with needsReauth so the
+// frontend can prompt a real sign-in instead of silently showing nothing.
+router.get("/discoverable", async (req, res) => {
+  if (!req.discordAccessToken) {
+    return res.json({ servers: [], needsReauth: true });
+  }
+
+  let discordGuilds;
+  try {
+    discordGuilds = await getUserGuilds(req.discordAccessToken);
+  } catch (err) {
+    return res.json({ servers: [], needsReauth: true });
+  }
+
+  const administered = discordGuilds.filter(g => g.owner || (BigInt(g.permissions) & BigInt(ADMINISTRATOR)) === BigInt(ADMINISTRATOR));
+  const ids = administered.map(g => g.id);
+  const { rows: installed } = ids.length
+    ? await pool.query("SELECT id, slug, plan FROM guilds WHERE id = ANY($1)", [ids])
+    : { rows: [] };
+  const installedById = new Map(installed.map(g => [g.id, g]));
+
+  res.json({
+    servers: administered
+      .map(g => ({
+        id: g.id,
+        name: g.name,
+        icon: g.icon,
+        owner: g.owner,
+        installed: installedById.has(g.id),
+        slug: installedById.get(g.id)?.slug || null,
+        plan: installedById.get(g.id)?.plan || null,
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name)),
+  });
+});
+
+// Every roster post this person currently holds, across every department
+// in every guild RostR knows about — not just guilds they own. Scans
+// department_data in application code rather than a JSONB path query
+// since roster is a nested, evolving shape (section -> group -> post) that
+// isn't worth hand-writing SQL against at RostR's current scale.
+router.get("/my-rosters", async (req, res) => {
+  const { rows } = await pool.query(
+    `SELECT g.id AS guild_id, g.name AS guild_name, g.slug AS guild_slug, g.icon AS guild_icon,
+            d.name AS department_name, d.slug AS department_slug, dd.value AS roster
+     FROM department_data dd
+     JOIN departments d ON d.id = dd.department_id
+     JOIN guilds g ON g.id = d.guild_id
+     WHERE dd.data_key = 'roster'`
+  );
+
+  const rosters = [];
+  for (const row of rows) {
+    for (const section of row.roster?.sections || []) {
+      for (const group of section.groups || []) {
+        for (const post of group.ranks || []) {
+          if (post.userId === req.user.id) {
+            rosters.push({
+              guildId: row.guild_id,
+              guildName: row.guild_name,
+              guildSlug: row.guild_slug,
+              guildIcon: row.guild_icon,
+              departmentName: row.department_name,
+              departmentSlug: row.department_slug,
+              rank: post.rank,
+              callsign: post.callsign || null,
+            });
+          }
+        }
+      }
+    }
+  }
+  res.json({ rosters });
 });
 
 router.get("/:guildId", requireGuildAccess, async (req, res) => {

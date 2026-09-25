@@ -4,13 +4,18 @@ const pool = require("../db/pool");
 const SESSION_TTL_MS = 24 * 60 * 60 * 1000; // 24h
 const COOKIE_NAME = "rostr_session";
 
-async function createSession(discordUser) {
+// discordToken is the token exchange response ({ access_token,
+// refresh_token, expires_in, ... }) — optional, since it's only present
+// when the OAuth flow actually granted one (both login modes do, but a
+// session helper shouldn't assume that).
+async function createSession(discordUser, discordToken) {
   const token = crypto.randomBytes(32).toString("hex");
   const expiresAt = new Date(Date.now() + SESSION_TTL_MS);
+  const tokenExpiresAt = discordToken ? new Date(Date.now() + discordToken.expires_in * 1000) : null;
   await pool.query(
-    `INSERT INTO sessions (token, discord_user_id, discord_username, discord_avatar, expires_at)
-     VALUES ($1, $2, $3, $4, $5)`,
-    [token, discordUser.id, discordUser.username, discordUser.avatar, expiresAt]
+    `INSERT INTO sessions (token, discord_user_id, discord_username, discord_avatar, expires_at, access_token, refresh_token, token_expires_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+    [token, discordUser.id, discordUser.username, discordUser.avatar, expiresAt, discordToken?.access_token || null, discordToken?.refresh_token || null, tokenExpiresAt]
   );
   return { token, expiresAt };
 }
@@ -31,6 +36,7 @@ async function attachSession(req, res, next) {
       username: rows[0].discord_username,
       avatar: rows[0].discord_avatar,
     };
+    req.discordAccessToken = rows[0].access_token;
   }
   next();
 }

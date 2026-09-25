@@ -490,3 +490,17 @@ label { display: block; font-size: 13px; margin-bottom: 6px; color: #a5abba; }
   font-size: 11px;
   white-space: nowrap;
 }
+
+.server-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px; }
+.server-card { display: block; text-decoration: none; color: inherit; margin-bottom: 0; }
+.server-card-head { display: flex; align-items: center; gap: 12px; }
+.server-card-icon { width: 40px; height: 40px; border-radius: 10px; object-fit: cover; flex-shrink: 0; }
+.server-card-icon-fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #22262f;
+  color: #6b7180;
+  font-weight: 700;
+  font-size: 16px;
+}

@@ -57,7 +57,7 @@ router.get("/discord/callback", async (req, res) => {
     const token = await oauth.exchangeCode(code);
     const discordUser = await oauth.getUser(token.access_token);
 
-    const session = await createSession(discordUser);
+    const session = await createSession(discordUser, token);
     setSessionCookie(res, session.token, session.expiresAt);
 
     // `token.guild` is present because the authorize URL requested the

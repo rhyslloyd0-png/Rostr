@@ -6,13 +6,18 @@ import AppHeader from "../../../components/AppHeader";
 const WEEKDAYS = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"];
 const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
+// Use UTC getters — the date arrives as midnight UTC, so local getters would
+// show the previous day in any timezone behind UTC.
 function formatDate(d) {
-  return `${String(d.getDate()).padStart(2, "0")} ${MONTH_NAMES[d.getMonth()].slice(0, 4)} ${d.getFullYear()}`;
+  return `${String(d.getUTCDate()).padStart(2, "0")} ${MONTH_NAMES[d.getUTCMonth()].slice(0, 4)} ${d.getUTCFullYear()}`;
 }
 
+// DATE columns come back from the API as full ISO timestamps (Postgres
+// returns JS Date objects, which JSON.stringify serializes with a "Z"
+// suffix) — parse directly rather than appending a time part onto them.
 function formatRange(startStr, endStr) {
-  const start = new Date(startStr + "T00:00:00");
-  const end = new Date(endStr + "T00:00:00");
+  const start = new Date(startStr);
+  const end = new Date(endStr);
   return `${formatDate(start)} → ${formatDate(end)}`;
 }
 

@@ -330,8 +330,13 @@ function AnnounceTab({ guildId, deptId }) {
   const [title, setTitle] = useState("");
   const [message, setMessage] = useState("");
   const [asEmbed, setAsEmbed] = useState(true);
+  const [links, setLinks] = useState([]);
   const [sending, setSending] = useState(false);
   const [status, setStatus] = useState(null);
+
+  function updateLink(i, field, value) {
+    setLinks(prev => prev.map((l, j) => (j === i ? { ...l, [field]: value } : l)));
+  }
 
   useEffect(() => {
     apiFetch(`/guilds/${guildId}/channels`)
@@ -349,11 +354,12 @@ function AnnounceTab({ guildId, deptId }) {
     try {
       await apiFetch(`/guilds/${guildId}/departments/${deptId}/announce`, {
         method: "POST",
-        body: { channelId, title: asEmbed ? title : undefined, message, asEmbed },
+        body: { channelId, title: asEmbed ? title : undefined, message, asEmbed, links },
       });
       setStatus({ type: "ok", message: "Sent." });
       setMessage("");
       setTitle("");
+      setLinks([]);
     } catch (err) {
       setStatus({ type: "error", message: err.body?.message || err.message });
     } finally {
@@ -391,7 +397,27 @@ function AnnounceTab({ guildId, deptId }) {
           <div className="field">
             <label>Message</label>
             <textarea rows={4} value={message} onChange={e => setMessage(e.target.value)} maxLength={2000} placeholder="Message to post in Discord..." />
+            <p className="muted" style={{ fontSize: 12, margin: "6px 0 0" }}>
+              Links typed in the message are clickable in Discord. {asEmbed ? <>In an embed you can also write <code>[text](https://…)</code> to link a word.</> : null}
+            </p>
           </div>
+
+          <div className="field">
+            <label>Link buttons (optional, up to 5)</label>
+            {links.map((l, i) => (
+              <div key={i} style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+                <input style={{ flex: "0 0 35%" }} placeholder="Button text" maxLength={80} value={l.label} onChange={e => updateLink(i, "label", e.target.value)} />
+                <input style={{ flex: 1 }} placeholder="https://…" value={l.url} onChange={e => updateLink(i, "url", e.target.value)} />
+                <button className="btn secondary" type="button" onClick={() => setLinks(prev => prev.filter((_, j) => j !== i))} title="Remove link">✕</button>
+              </div>
+            ))}
+            {links.length < 5 && (
+              <button className="btn secondary" type="button" onClick={() => setLinks(prev => [...prev, { label: "", url: "" }])}>
+                + Add link button
+              </button>
+            )}
+          </div>
+
           <button className="btn" disabled={sending || !message.trim()} onClick={send}>{sending ? "Sending..." : "Send message"}</button>
           {status && <p className={status.type === "error" ? "error" : "muted"} style={{ marginTop: 8 }}>{status.message}</p>}
         </>

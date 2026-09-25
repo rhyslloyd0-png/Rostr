@@ -471,16 +471,37 @@ router.get("/:deptId/sop/:fileId/download", requireDepartmentAdmin, requireFeatu
 // stamping who actually sent it (so "the bot said X" is traceable to an
 // admin without needing a message log of its own).
 router.post("/:deptId/announce", requireDepartmentAdmin, async (req, res) => {
-  const { channelId, message, title, asEmbed } = req.body;
+  const { channelId, message, title, asEmbed, links = [] } = req.body;
   if (!channelId || !message || !message.trim()) {
     return res.status(400).json({ error: "channelId and message are required" });
   }
   const content = message.trim().slice(0, 2000);
 
+  // Link buttons under the message — Discord allows up to 5 per row, and a
+  // link-style button needs no interaction handler, so the REST-only bot can
+  // send them. Only http(s) URLs; Discord rejects anything else anyway.
+  if (!Array.isArray(links) || links.length > 5) {
+    return res.status(400).json({ error: "Up to 5 link buttons are allowed" });
+  }
+  const buttons = [];
+  for (const link of links) {
+    const label = String(link?.label || "").trim();
+    const url = String(link?.url || "").trim();
+    let parsed;
+    try { parsed = new URL(url); } catch { parsed = null; }
+    if (!label || label.length > 80) return res.status(400).json({ error: "Each link needs a label of 1–80 characters" });
+    if (!parsed || !["http:", "https:"].includes(parsed.protocol) || url.length > 512) {
+      return res.status(400).json({ error: `"${label}" needs a full http(s):// link` });
+    }
+    buttons.push({ type: 2, style: 5, label, url });
+  }
+  const components = buttons.length ? [{ type: 1, components: buttons }] : undefined;
+
+  let payload;
   if (asEmbed) {
     const member = await getGuildMember(req.guild.id, req.user.id);
     const displayName = member?.nick || member?.user?.global_name || req.user.username;
-    await sendChannelMessage(channelId, {
+    payload = {
       embeds: [{
         title: title ? title.trim().slice(0, 256) : undefined,
         description: content,
@@ -488,9 +509,16 @@ router.post("/:deptId/announce", requireDepartmentAdmin, async (req, res) => {
         footer: { text: `${req.department.name} • sent by ${displayName}` },
         timestamp: new Date().toISOString(),
       }],
-    });
+      components,
+    };
   } else {
-    await sendChannelMessage(channelId, { content });
+    payload = { content, components };
+  }
+
+  try {
+    await sendChannelMessage(channelId, payload);
+  } catch (err) {
+    return res.status(502).json({ error: `Discord rejected the message: ${err.message}` });
   }
   res.json({ ok: true });
 });

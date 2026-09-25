@@ -51,6 +51,11 @@ router.get("/:guildId/:deptId/:fileId/view", async (req, res) => {
   res.set("Content-Type", file.content_type);
   res.set("Content-Disposition", `inline; filename="${sanitizeFilename(file.display_name || file.filename)}"`);
   res.set("X-Content-Type-Options", "nosniff");
+  // Same isolation as the viewer iframe's sandbox attribute, but enforced by
+  // the response itself — so opening this URL directly in a tab (outside
+  // the iframe) still gives the document an opaque origin with no access
+  // to the session cookie.
+  res.set("Content-Security-Policy", "sandbox allow-scripts allow-popups");
   res.send(file.data);
 });
 

@@ -92,7 +92,7 @@ router.patch("/:deptId", requireDepartmentAdmin, async (req, res) => {
   const setClause = updates.map((field, i) => `${field} = $${i + 3}`).join(", ");
   const values = updates.map(f => req.body[f]);
   const { rows } = await pool.query(
-    `UPDATE departments SET ${setClause} WHERE id = $1 AND guild_id = $2 RETURNING *`,
+    `UPDATE departments SET ${setClause} WHERE (id::text = $1 OR slug = $1) AND guild_id = $2 RETURNING *`,
     [req.params.deptId, req.guild.id, ...values]
   );
   res.json({ department: stripBanner(rows[0]) });
